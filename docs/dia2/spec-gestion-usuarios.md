@@ -1,412 +1,461 @@
-Spec de Ingeniería Inversa — Gestión de Usuarios
+# Spec de Ingeniería Inversa — Gestión de Usuarios
 
+**Proyecto:** Kryon
+**Módulo:** Configuración de Empresa y Aislamiento
+**Funcionalidad:** Gestión de Usuarios
+**Tipo:** Spec de ingeniería inversa — Día 2
+**Estado:** En revisión
 
+---
 
-Proyecto: Kryon
+## 1. PROBLEMA
 
-Módulo: Configuración de Empresa y Aislamiento
+Una empresa que utiliza Kryon necesita administrar las personas que pueden acceder al sistema, identificando a qué empresa pertenecen, qué rol poseen, cuál es su estado y qué permisos tienen disponibles.
 
-Funcionalidad: Gestión de Usuarios
+Sin una gestión centralizada de usuarios, el administrador del negocio tendría dificultades para controlar quién puede utilizar Kryon, mantener actualizados los datos de los usuarios y restringir el acceso de cuentas que ya no deben utilizar el sistema.
 
-Tipo: Spec de ingeniería inversa — Día 2
+La Gestión de Usuarios debe permitir administrar únicamente los usuarios pertenecientes a la empresa actual, manteniendo el aislamiento de información entre empresas.
 
-Estado: En Revision
+---
 
+## 2. USUARIOS INVOLUCRADOS
 
+### Administrador del negocio
 
-1\. PROBLEMA
+Usuario encargado de administrar las cuentas pertenecientes a su empresa.
 
-Una empresa que utiliza Kryon necesita administrar qué personas pueden acceder al sistema y qué permisos poseen dentro de la organización.
+Dependiendo de sus permisos, puede visualizar usuarios, crear nuevas cuentas, editar usuarios existentes, cambiar su estado y acceder a la configuración de sus permisos.
 
+No debe administrar usuarios pertenecientes a otras empresas.
 
+### Usuario de la empresa
 
-Sin una gestión centralizada de usuarios, el administrador del negocio tendría dificultades para controlar quién puede ingresar al sistema, qué acciones puede realizar cada persona y a qué empresa pertenece cada usuario.
+Persona registrada dentro de una empresa que puede acceder a Kryon de acuerdo con su estado, rol y permisos asignados.
 
+Un usuario puede encontrarse asociado a una sucursal de la empresa.
 
+---
 
-La funcionalidad de Gestión de Usuarios debe permitir administrar los usuarios pertenecientes a una empresa manteniendo el aislamiento de información entre empresas.
+## 3. HISTORIAS DE USUARIO
 
-
-
-
-
-2\. USUARIOS INVOLUCRADOS
-
-Administrador del negocio
-
-
-
-Usuario responsable de administrar las cuentas de usuario pertenecientes a su empresa.
-
-
-
-Debe poder visualizar y gestionar únicamente los usuarios correspondientes a la empresa en la que está operando.
-
-
-
-Usuario de la empresa
-
-
-
-Persona registrada dentro de una empresa que puede acceder a Kryon de acuerdo con el rol y los permisos que tenga asignados.
-
-
-
-
-
-3\. HISTORIAS DE USUARIO
-
-HU-01 — Visualizar usuarios
+### HU-01 — Visualizar usuarios
 
 Como administrador del negocio,
-
 quiero visualizar los usuarios registrados en mi empresa,
+para conocer quiénes poseen acceso a Kryon y cuál es su situación actual.
 
-para conocer quiénes tienen acceso al sistema.
+### HU-02 — Registrar usuario
 
-
-
-HU-02 — Registrar usuario
-
-Como administrador del negocio,
-
+Como administrador del negocio con permiso para crear usuarios,
 quiero registrar un nuevo usuario en mi empresa,
+para permitirle acceder a Kryon.
 
-para permitirle utilizar Kryon según el rol que se le asigne.
-
-
-
-HU-03 — Consultar información de un usuario
+### HU-03 — Visualizar información de los usuarios
 
 Como administrador del negocio,
+quiero visualizar la información principal de cada usuario,
+para conocer su nombre, usuario, correo, rol, sucursal, estado y último acceso.
 
-quiero consultar la información de un usuario,
+### HU-04 — Editar usuario
 
-para revisar sus datos y configuración dentro de la empresa.
-
-
-
-HU-04 — Editar usuario
-
-Como administrador del negocio,
-
-quiero modificar los datos permitidos de un usuario,
-
+Como administrador del negocio con permiso de edición,
+quiero modificar los datos de un usuario perteneciente a mi empresa,
 para mantener su información actualizada.
 
+### HU-05 — Asignar rol
 
+Como administrador del negocio con permiso de edición,
+quiero asignar un rol disponible a un usuario,
+para establecer el rol con el que utilizará Kryon.
 
-HU-05 — Asignar rol
-
-Como administrador del negocio,
-
-quiero asignar un rol a un usuario,
-
-para determinar las funciones del sistema a las que puede acceder.
-
-
-
-HU-06 — Cambiar estado de usuario
+### HU-06 — Asociar usuario a una sucursal
 
 Como administrador del negocio,
+quiero asociar un usuario a una sucursal activa de mi empresa,
+para relacionar su operación con una ubicación determinada.
 
-quiero poder cambiar el estado de un usuario,
+### HU-07 — Cambiar estado de usuario
 
-para controlar si puede continuar utilizando el sistema.
+Como administrador del negocio con permiso de edición,
+quiero activar o desactivar un usuario,
+para controlar si puede continuar accediendo al sistema.
 
+### HU-08 — Administrar permisos
 
+Como administrador del negocio con permiso de edición,
+quiero acceder a la configuración de permisos de un usuario de mi empresa,
+para controlar las funcionalidades a las que puede acceder.
 
+---
 
+## 4. CRITERIOS DE ACEPTACIÓN
 
-4\. CRITERIOS DE ACEPTACIÓN
-
-CA-01 — Listado de usuarios de la empresa
-
-
-
-Dado que un administrador del negocio ha ingresado a Gestión de Usuarios,
-
-cuando el sistema muestre el listado de usuarios,
-
-entonces solo debe mostrar usuarios pertenecientes a la empresa actual.
-
-
-
-CA-02 — Registrar un usuario
-
-
+### CA-01 — Listado limitado a la empresa actual
 
 Dado que el administrador se encuentra en Gestión de Usuarios,
+cuando visualiza el listado,
+entonces únicamente se muestran usuarios pertenecientes a la empresa actual.
 
-cuando registre un usuario proporcionando todos los datos obligatorios válidos,
+### CA-02 — Información mostrada en el listado
 
-entonces el usuario debe quedar registrado dentro de la empresa actual.
+Dado que existen usuarios registrados en la empresa,
+cuando el administrador visualiza el listado,
+entonces puede consultar para cada usuario su nombre completo, nombre de usuario, correo electrónico, rol, sucursal, estado y último acceso.
 
+### CA-03 — Registro de usuario
 
+Dado que el administrador posee permiso para crear usuarios y la empresa no ha alcanzado su límite,
+cuando completa los datos obligatorios con un nombre de usuario que no se encuentra registrado,
+entonces el nuevo usuario queda registrado en la empresa actual con estado ACTIVO.
 
-CA-03 — Validación de datos obligatorios
+### CA-04 — Datos obligatorios durante el registro
 
+Dado que el administrador intenta crear un usuario,
+cuando no proporciona nombre completo, nombre de usuario, correo electrónico o contraseña,
+entonces el formulario no debe completar el registro.
 
+### CA-05 — Nombre de usuario no duplicado
 
-Dado que el administrador intenta registrar un usuario,
+Dado que ya existe una cuenta con un determinado nombre de usuario,
+cuando se intenta registrar otra cuenta utilizando ese mismo nombre de usuario,
+entonces el sistema rechaza el registro.
 
-cuando uno o más datos obligatorios estén incompletos,
+### CA-06 — Límite de usuarios por empresa
 
-entonces el sistema debe impedir el registro e indicar qué información debe corregirse.
+Dado que la empresa ya tiene cuatro usuarios registrados,
+cuando el administrador intenta crear un usuario adicional,
+entonces el sistema impide el registro.
 
+### CA-07 — Roles disponibles en Gestión de Usuarios
 
+Dado que el administrador está creando o editando un usuario desde la interfaz existente,
+cuando selecciona el rol del usuario,
+entonces puede elegir entre los roles ofrecidos por la pantalla: VENDEDOR, ALMACEN, CAJERO o ADMINISTRADOR.
 
-CA-04 — Consultar usuario
+### CA-08 — Asociación con sucursal
 
+Dado que el administrador selecciona una sucursal para un usuario,
+cuando confirma el registro o la edición,
+entonces la sucursal debe existir, pertenecer a la empresa actual y encontrarse activa.
 
+### CA-09 — Registro cuando existen sucursales activas
 
-Dado que existe un usuario perteneciente a la empresa,
+Dado que la empresa posee sucursales activas,
+cuando el administrador utiliza el formulario de creación de usuario,
+entonces la interfaz solicita seleccionar una sucursal.
 
-cuando el administrador seleccione dicho usuario,
+### CA-10 — Usuario sin sucursal
 
-entonces debe poder visualizar la información disponible de ese usuario.
+Dado que un usuario no tiene una sucursal asociada,
+cuando aparece en el listado de usuarios,
+entonces el sistema lo identifica como "Sin sucursal".
 
+### CA-11 — Edición de usuario
 
+Dado que el administrador posee permiso de edición y selecciona un usuario perteneciente a su empresa,
+cuando modifica sus datos y confirma la operación,
+entonces el sistema actualiza la información del usuario.
 
-CA-05 — Editar usuario
+### CA-12 — Cambio de estado
 
+Dado que el administrador posee permiso de edición,
+cuando cambia el estado de un usuario perteneciente a su empresa,
+entonces un usuario ACTIVO pasa a INACTIVO y un usuario INACTIVO pasa a ACTIVO.
 
+### CA-13 — Acceso de usuario inactivo
 
-Dado que el administrador seleccionó un usuario existente,
+Dado que un usuario se encuentra en estado INACTIVO,
+cuando intenta iniciar sesión en Kryon,
+entonces el sistema impide el acceso e informa que la cuenta se encuentra inactiva.
 
-cuando modifique información válida y confirme los cambios,
-
-entonces el sistema debe guardar la nueva información del usuario.
-
-
-
-CA-06 — Asignación de rol
-
-
-
-Dado que el administrador está registrando o modificando un usuario,
-
-cuando asigne un rol válido,
-
-entonces el usuario debe quedar asociado a dicho rol dentro de la empresa.
-
-
-
-CA-07 — Desactivar usuario
-
-
-
-Dado que existe un usuario activo,
-
-cuando el administrador lo desactive,
-
-entonces el usuario debe quedar identificado como inactivo y dejar de disponer del acceso correspondiente.
-
-
-
-CA-08 — Reactivar usuario
-
-
-
-Dado que existe un usuario inactivo,
-
-cuando el administrador lo reactive,
-
-entonces el usuario debe volver a quedar activo de acuerdo con sus permisos vigentes.
-
-
-
-CA-09 — Aislamiento entre empresas
-
-
+### CA-14 — Aislamiento entre empresas
 
 Dado que existen usuarios registrados en diferentes empresas,
+cuando un administrador visualiza, edita, cambia el estado o administra permisos de un usuario,
+entonces la operación solo puede realizarse sobre usuarios pertenecientes a la empresa actual.
 
-cuando un administrador consulte Gestión de Usuarios,
+### CA-15 — Control por permisos
 
-entonces no debe poder visualizar, consultar ni modificar usuarios pertenecientes a otra empresa.
+Dado que un usuario no posee el permiso requerido para una operación de Gestión de Usuarios,
+cuando intenta realizar dicha operación,
+entonces el sistema le impide continuar.
 
+### CA-16 — Listado sin usuarios
 
+Dado que no existen usuarios registrados para mostrar,
+cuando se carga el listado,
+entonces la interfaz muestra el mensaje "No hay usuarios registrados".
 
-CA-10 — Acciones sin autorización
+### CA-17 — Rol y permisos individuales
 
+Dado que un usuario posee un rol asignado,
+cuando se consulta su configuración,
+entonces sus permisos individuales se gestionan separadamente del rol.
 
+---
 
-Dado que un usuario no posee permisos para administrar usuarios,
+## 5. CASOS BORDE
 
-cuando intente realizar una operación administrativa sobre ellos,
+### CB-01 — Nombre de usuario ya existente
 
-entonces el sistema debe rechazar la operación.
+Dado que existe una cuenta con un determinado nombre de usuario,
+cuando el administrador intenta registrar otra cuenta utilizando el mismo nombre,
+entonces el sistema rechaza el registro.
 
+La revisión del sistema existente confirmó que la comprobación del nombre de usuario no está limitada a la empresa actual.
 
+### CB-02 — Empresa con cuatro usuarios
 
+Dado que una empresa ya posee cuatro usuarios registrados,
+cuando se intenta registrar un quinto usuario,
+entonces el sistema impide la creación.
 
+### CB-03 — Usuario perteneciente a otra empresa
 
-5\. CASOS BORDE
+Dado que existe un usuario perteneciente a otra empresa,
+cuando se intenta editarlo, cambiar su estado o administrar sus permisos desde la empresa actual,
+entonces la operación no debe afectar al usuario de la otra empresa.
 
+### CB-04 — Sucursal perteneciente a otra empresa
 
+Dado que se intenta asociar una sucursal a un usuario,
+cuando dicha sucursal pertenece a otra empresa,
+entonces el sistema rechaza la asociación.
 
-CB-01 — Usuario ya existente
+### CB-05 — Sucursal inactiva
 
+Dado que una sucursal se encuentra INACTIVA,
+cuando se intenta asociarla a un usuario,
+entonces el sistema rechaza la operación.
 
+### CB-06 — Empresa sin sucursales activas
 
-¿Qué ocurre si el administrador intenta registrar un usuario utilizando información que identifica a una cuenta que ya existe?
+Dado que una empresa no posee sucursales activas,
+cuando el administrador abre el formulario de creación de usuario,
+entonces no dispone de una sucursal activa para seleccionar y la interfaz informa que primero debe crear una.
 
+### CB-07 — Usuario sin sucursal
 
+Dado que un usuario no posee una sucursal asociada,
+cuando aparece en el listado,
+entonces el sistema muestra que se encuentra "Sin sucursal".
 
-Resultado esperado: el sistema no debe crear registros duplicados cuando exista una regla de unicidad aplicable.
+### CB-08 — Usuario inactivo intenta iniciar sesión
 
+Dado que un usuario se encuentra INACTIVO,
+cuando intenta acceder a Kryon,
+entonces el sistema rechaza el inicio de sesión.
 
+### CB-09 — Usuario sin permisos suficientes
 
-Nota: este punto debe verificarse contra el Kryon existente para determinar qué campo identifica de manera única al usuario.
+Dado que un usuario no posee el permiso requerido para administrar usuarios,
+cuando intenta realizar una operación protegida,
+entonces el sistema rechaza el acceso a dicha operación.
 
+### CB-10 — Usuario inexistente o fuera de la empresa
 
+Dado que se proporciona un identificador de usuario inexistente o perteneciente a otra empresa,
+cuando se intenta realizar una operación sobre dicho usuario,
+entonces el sistema no debe modificar usuarios ajenos a la empresa actual.
 
-CB-02 — Usuario de otra empresa
+### CB-11 — Administrador modifica su propia cuenta
 
+Dado que el usuario que administra Gestión de Usuarios también pertenece a la empresa actual,
+cuando selecciona su propia cuenta para editarla,
+entonces el sistema existente no aplica una restricción específica que impida la operación si posee los permisos correspondientes.
 
+### CB-12 — Administrador cambia el estado de su propia cuenta
 
-¿Qué ocurre si se intenta consultar o modificar directamente un usuario perteneciente a otra empresa?
+Dado que un administrador posee permiso para editar usuarios,
+cuando ejecuta el cambio de estado sobre su propia cuenta,
+entonces el sistema existente no aplica una restricción especial por tratarse de su propia cuenta.
 
+Este comportamiento debe considerarse durante la revisión del mentor antes de decidir si se conserva en la nueva versión.
 
+---
 
-Resultado esperado: la operación debe ser rechazada.
+## 6. FUERA DE ALCANCE
 
+Para esta especificación de Gestión de Usuarios quedan fuera:
 
+- recuperación de contraseña;
+- proceso general de autenticación;
+- verificación de correo electrónico;
+- gestión completa del catálogo de roles;
+- definición interna de cada permiso individual;
+- configuración general de la empresa;
+- administración de sucursales;
+- auditoría avanzada;
+- administración de usuarios pertenecientes a otras empresas;
+- funcionalidades pertenecientes a otros módulos de Kryon.
 
-CB-03 — Rol inexistente o no disponible
+La Gestión de Usuarios permite acceder a la configuración de permisos de un usuario, pero el detalle completo de la matriz de permisos puede especificarse separadamente.
 
+---
 
+## 7. HALLAZGOS CONFIRMADOS DE INGENIERÍA INVERSA
 
-¿Qué ocurre si se intenta asignar a un usuario un rol que no existe o que no corresponde a la empresa actual?
+### 7.1 Campos utilizados
 
+En la Gestión de Usuarios existente se identificaron los siguientes datos:
 
+- nombre completo;
+- nombre de usuario;
+- correo electrónico;
+- contraseña durante el registro;
+- rol;
+- sucursal asociada;
+- estado;
+- último acceso.
 
-Resultado esperado: el sistema debe rechazar la operación.
+El listado muestra:
 
+- nombre completo y nombre de usuario;
+- correo electrónico;
+- rol;
+- sucursal;
+- estado;
+- último acceso.
 
+### 7.2 Campos obligatorios de creación
 
-CB-04 — Usuario ya inactivo
+El formulario de creación requiere:
 
+- nombre completo;
+- nombre de usuario;
+- correo electrónico;
+- contraseña.
 
+Cuando existen sucursales activas, la interfaz también requiere seleccionar una sucursal.
 
-¿Qué ocurre si se intenta desactivar nuevamente un usuario que ya está inactivo?
+### 7.3 Unicidad del nombre de usuario
 
+La funcionalidad comprueba si el nombre de usuario ya existe antes de crear una cuenta.
 
+La comprobación existente se realiza independientemente de la empresa, por lo que dos empresas no pueden registrar mediante este flujo el mismo nombre de usuario.
 
-Resultado esperado: el sistema no debe generar un estado inconsistente.
+No se encontró en este flujo una comprobación equivalente que exija que el correo electrónico sea único.
 
+### 7.4 Roles
 
+Cada usuario utiliza un único valor de rol.
 
-CB-05 — Usuario inexistente
+La pantalla de Gestión de Usuarios ofrece actualmente:
 
+- VENDEDOR;
+- ALMACEN;
+- CAJERO;
+- ADMINISTRADOR.
 
+El rol y los permisos individuales se manejan como conceptos separados.
 
-¿Qué ocurre si se intenta consultar, modificar o cambiar el estado de un usuario que ya no existe?
+### 7.5 Estados
 
+Los estados utilizados por Gestión de Usuarios son:
 
+- ACTIVO;
+- INACTIVO.
 
-Resultado esperado: el sistema debe informar que el usuario solicitado no está disponible.
+El cambio de estado alterna entre ambos valores.
 
+### 7.6 Eliminación
 
+No se encontró una acción de eliminación definitiva de usuarios dentro de la Gestión de Usuarios revisada.
 
-CB-06 — Datos inválidos
+La forma existente de impedir que una cuenta continúe utilizándose es cambiar su estado a INACTIVO.
 
+Aunque existe un permiso denominado `usuarios_eliminar`, no se encontró una acción visible de eliminación de usuarios en esta funcionalidad.
 
+### 7.7 Usuario inactivo
 
-¿Qué ocurre si durante el registro o edición se proporciona información con un formato no permitido?
+Cuando una cuenta INACTIVA intenta iniciar sesión, Kryon impide el acceso e informa:
 
+"La cuenta se encuentra inactiva."
 
+### 7.8 Administración de la propia cuenta
 
-Resultado esperado: el sistema debe impedir guardar información inválida e indicar qué debe corregirse.
+No se encontró una restricción específica que excluya al usuario actual de las operaciones de edición o cambio de estado.
 
+Las operaciones verifican principalmente que el usuario objetivo pertenezca a la empresa actual y que quien ejecuta la operación tenga el permiso correspondiente.
 
+### 7.9 Búsqueda, filtros y paginación
 
+No se encontraron controles de búsqueda, filtros ni paginación dentro del listado de Gestión de Usuarios revisado.
 
+El sistema muestra directamente los usuarios correspondientes a la empresa actual.
 
-6\. FUERA DE ALCANCE
+### 7.10 Acciones disponibles
 
+Las principales acciones visibles encontradas son:
 
+- crear usuario;
+- editar usuario;
+- cambiar estado;
+- configurar permisos.
 
-Para esta especificación inicial quedan fuera:
+Cuando el usuario puede visualizar el listado pero no posee permiso de edición, la interfaz muestra la información en modo de solo lectura.
 
+### 7.11 Aislamiento entre empresas
 
+La carga del listado está limitada a la empresa actual.
 
-\- recuperación de contraseña;
+Las operaciones de edición, cambio de estado y configuración de permisos también comprueban que el usuario objetivo pertenezca a la empresa actual.
 
-\- autenticación del usuario;
+### 7.12 Sucursales
 
-\- configuración detallada de permisos individuales;
+Un usuario puede encontrarse asociado a una sucursal.
 
-\- gestión completa de roles;
+Cuando se proporciona una sucursal durante el registro o edición, esta debe:
 
-\- auditoría avanzada;
+- existir;
+- pertenecer a la empresa actual;
+- encontrarse ACTIVA.
 
-\- administración de usuarios pertenecientes a otras empresas;
+En la edición es posible seleccionar la opción "Sin sucursal".
 
-\- configuración general de la empresa;
+### 7.13 Límite de usuarios
 
-\- funcionalidades pertenecientes a otros módulos de Kryon.
+La versión revisada de Kryon establece un máximo de cuatro usuarios registrados por empresa.
 
+Al alcanzar cuatro usuarios, el sistema impide registrar uno adicional.
 
+### 7.14 Permisos individuales
 
-Si al revisar el Kryon existente descubrimos que alguna de estas funciones forma parte realmente de Gestión de Usuarios, se corrige esta sección.
+La Gestión de Usuarios utiliza permisos individuales independientes del rol.
 
+Entre los permisos relacionados directamente con esta funcionalidad se encontraron:
 
+- `usuarios_ver`;
+- `usuarios_crear`;
+- `usuarios_editar`;
+- `usuarios_eliminar`.
 
+El permiso de edición se utiliza también para acceder a la configuración de permisos y para cambiar el estado de un usuario.
 
+---
 
-7\. PREGUNTAS PENDIENTES DE INGENIERÍA INVERSA
+## 8. RESULTADO DEL DÍA 2
 
+Durante la ingeniería inversa de Gestión de Usuarios se realizó lo siguiente:
 
+1. Se elaboró una primera spec de la funcionalidad.
+2. Se revisó posteriormente el código existente de Kryon.
+3. Se identificaron los campos y acciones reales de Gestión de Usuarios.
+4. Se confirmó el aislamiento de usuarios por empresa.
+5. Se identificaron los roles ofrecidos por la interfaz.
+6. Se confirmaron los estados ACTIVO e INACTIVO.
+7. Se identificó la asociación de usuarios con sucursales.
+8. Se confirmó el límite existente de cuatro usuarios por empresa.
+9. Se confirmó la validación del nombre de usuario existente.
+10. Se identificó la separación entre rol y permisos individuales.
+11. Se agregaron casos borde descubiertos durante la revisión.
+12. Se actualizó la spec de acuerdo con el comportamiento encontrado.
 
-1\. ¿Qué campos tiene exactamente un usuario?
+### Pendiente para cerrar formalmente el Día 2
 
-2\. ¿Cuál de esos campos es obligatorio?
+- realizar la validación final de la spec contra el checklist;
+- solicitar la revisión del mentor;
+- incorporar cualquier corrección solicitada por el mentor;
+- realizar la kata sin IA indicada por el plan, si todavía no se ha realizado.
 
-3\. ¿Correo, documento u otro dato debe ser único?
-
-4\. ¿Un usuario puede tener uno o varios roles?
-
-5\. ¿Qué estados de usuario existen realmente?
-
-6\. ¿El sistema elimina usuarios o solamente los desactiva?
-
-7\. ¿Qué ocurre con un usuario que intenta acceder estando inactivo?
-
-8\. ¿Un administrador puede modificar su propia cuenta o estado?
-
-9\. ¿Existe búsqueda, filtrado o paginación en el listado?
-
-10\. ¿Qué acciones aparecen realmente en la interfaz?
-
-
-
-
-
-8\. RESULTADO DEL DÍA 2
-
-
-
-1\. Usar Gestión de Usuarios como usuario.
-
-2\. Comparar lo observado con esta spec.
-
-3\. Corregir historias y criterios.
-
-4\. Revisar recién después el código antiguo.
-
-5\. Encontrar casos borde que no habíamos considerado.
-
-6\. Actualizar la spec.
-
-7\. Pasar el checklist de calidad.
-
-8\. Enviar al mentor para revisión.
-
-
-
-Nota: todavía no se usa /speckit-specify para esta práctica. Esta es la spec manual de ingeniería inversa correspondiente al Día 2.
-
-
-
+Esta spec corresponde a la práctica manual de ingeniería inversa del Día 2 y no utiliza `/speckit-specify`.
