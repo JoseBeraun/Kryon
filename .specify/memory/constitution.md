@@ -1,32 +1,3 @@
-<!--
-SYNC IMPACT REPORT (scratch — eliminar antes de hacer commit de la enmienda)
-
-Cambio de versión: [CONSTITUTION_VERSION] (plantilla sin rellenar) → 1.0.0
-
-Tipo de cambio: MAJOR — ratificación inicial. La plantilla no contenía principios
-definidos; esta enmienda establece el marco de gobierno completo del proyecto.
-
-Principios definidos (la plantilla traía 5 espacios; el proyecto define 8):
-- [PRINCIPLE_1_NAME] → I. Aislamiento Multiempresa (NO NEGOCIABLE)
-- [PRINCIPLE_2_NAME] → II. Control de Acceso por Rol
-- [PRINCIPLE_3_NAME] → III. Especificación Antes de Implementación
-- [PRINCIPLE_4_NAME] → IV. Criterios Verificables y Pruebas
-- [PRINCIPLE_5_NAME] → V. Trazabilidad
-- (nuevo) → VI. Seguridad por Defecto
-- (nuevo) → VII. Desarrollo Incremental y Revisable
-- (nuevo) → VIII. Uso Responsable de IA
-
-Secciones añadidas:
-- Restricciones de Seguridad y Datos (antes [SECTION_2_NAME])
-- Flujo de Desarrollo y Puertas de Calidad (antes [SECTION_3_NAME])
-- Governance (reglas concretas de enmienda, versionado y cumplimiento)
-
-Secciones eliminadas: ninguna.
-
-TODO diferidos: ninguno. Todos los marcadores de la plantilla fueron reemplazados
-con contenido concreto.
--->
-
 # Kryon Constitution
 
 Kryon es un ERP SaaS multiempresa orientado a la gestión de negocios. Esta constitución
@@ -182,6 +153,15 @@ ese texto en software del que el equipo puede responder.
 - Las operaciones sobre datos de producción DEBEN preservar la información de trazabilidad
   exigida por el Principio V.
 - La eliminación de datos DEBE preservar el rastro de la operación y su autoría.
+
+## Estándares de Calidad y Accesibilidad
+
+- Cada criterio de aceptación DEBE estar cubierto por al menos una prueba verificable.
+- El código DEBE superar las validaciones de calidad definidas por el proyecto antes de integrarse.
+- Las funcionalidades de interfaz DEBEN permitir ejecutar sus acciones principales mediante teclado.
+- Todo control interactivo DEBE contar con una etiqueta o nombre accesible que describa su función.
+- Los mensajes de error DEBEN indicar claramente qué acción o dato debe corregirse y NO DEBEN depender únicamente del color para comunicar su significado.
+- Los requisitos de accesibilidad aplicables a cada feature DEBEN ser verificables durante su revisión.
 
 ## Flujo de Desarrollo y Puertas de Calidad
 
