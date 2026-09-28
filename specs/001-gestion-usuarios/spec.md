@@ -13,9 +13,10 @@
 Kryon es un ERP SaaS multiempresa que se reconstruye desde cero. El Kryon antiguo sirve
 únicamente como referencia de negocio. Esta especificación **no** hereda sus reglas,
 limitaciones ni comportamientos de forma automática (en particular, **no** se hereda el límite
-de cuatro usuarios por empresa; si el nuevo Kryon tendrá algún límite es una pregunta abierta,
-ver OQ-8). Toda regla de negocio no definida explícitamente se
-registra en [Preguntas Abiertas](#preguntas-abiertas) en lugar de asumirse.
+de cuatro usuarios por empresa; si existe un límite, su política se define fuera de esta
+feature, ver DEP-5). Esta especificación contiene únicamente las reglas ya definidas para la
+Gestión de Usuarios; las decisiones que pertenecen a otras specs o al negocio se registran en
+[Dependencias y Decisiones Diferidas](#dependencias-y-decisiones-diferidas) en lugar de asumirse.
 
 ### Actores y roles
 
@@ -31,11 +32,31 @@ registra en [Preguntas Abiertas](#preguntas-abiertas) en lugar de asumirse.
 |-----------|-------------------|--------------------------|
 | Ver el listado de usuarios de la empresa | Administrador del negocio | No |
 | Consultar el detalle de un usuario | Administrador del negocio | No |
-| Acceder al registro de un nuevo usuario | Administrador del negocio | Sí (el alta resultante) |
-| Acceder a la edición de un usuario | Administrador del negocio | Sí (la modificación resultante) |
+| Registrar un nuevo usuario | Administrador del negocio | **Sí** |
+| Editar un usuario existente | Administrador del negocio | **Sí** |
 | Desactivar un usuario | Administrador del negocio | **Sí** |
 | Activar (reactivar) un usuario | Administrador del negocio | **Sí** |
 | Cualquier operación sobre usuarios de otra empresa | **Ningún rol** | — (siempre denegada) |
+
+## Clarifications
+
+### Session 2026-09-28
+
+- Q: ¿Los formularios de registro y edición de usuario se especifican en esta feature o en una separada? (OQ-1) → A: Se incluyen en esta feature: formularios completos de registro y edición (datos, validaciones y asignación de rol).
+- Q: ¿Puede un administrador desactivar su propia cuenta, y puede una empresa quedarse sin ningún administrador activo? (OQ-2) → A: No. Nadie puede desactivar su propia cuenta y no se puede desactivar al último administrador activo de la empresa.
+- Q: ¿Puede un administrador editar, cambiar el rol, activar o desactivar a otro administrador de su misma empresa? (OQ-4) → A: Sí. Todos los administradores de la empresa son iguales y pueden gestionarse entre sí, sujetos a la regla del último administrador activo, que también aplica al quitar el rol de administrador.
+- Q: ¿Debe la interfaz pedir confirmación antes de desactivar o activar a un usuario? (OQ-9) → A: Solo al desactivar, mostrando el nombre del usuario afectado; cancelar no produce cambios. Activar se aplica sin confirmación.
+- Q: ¿El identificador de acceso debe ser único solo dentro de la empresa o en todo Kryon? (OQ-11) → A: Aún no se decide; diferida a la futura spec de autenticación (ver DEP-3).
+- Q: ¿En qué estado debe quedar un usuario justo después de que el administrador lo registra? (OQ-12 / OQ-6) → A: Aún no se decide; diferida a la futura spec de autenticación (ver DEP-2).
+- Q: ¿Puede el administrador cambiar el identificador de acceso de un usuario después de registrarlo? (OQ-10) → A: Aún no se decide; diferida a la futura spec de autenticación (ver DEP-4).
+- Q: ¿Debe el administrador ver su propia cuenta en el listado de usuarios de su empresa? (OQ-3) → A: Sí. Aparece en el listado marcada como cuenta propia ("Tú"), sin la acción "Desactivar". Como la empresa siempre tiene al menos un usuario, el estado vacío no aparece en condiciones normales.
+- Q: ¿Qué herramientas debe tener el listado para encontrar usuarios? (OQ-7) → A: Búsqueda por nombre o identificador de acceso, más filtros por rol y por estado, siempre limitados a la empresa actual. (La forma de navegar listados grandes se resolvió en una pregunta posterior de esta sesión.)
+- Q: ¿Debe esta feature tener en cuenta un posible límite de usuarios por empresa al registrar nuevos usuarios? (OQ-8) → A: Sí. Puede existir un límite definido fuera de esta feature (p. ej. por plan); si existe y se alcanza, el registro se rechaza con un mensaje claro. La cifra y la política del límite son una decisión comercial externa (ver DEP-5).
+- Q: ¿Puede un administrador cambiar su propio rol cuando la empresa tiene otros administradores activos? → A: No. Nadie puede cambiar su propio rol; en la edición de su propia cuenta el rol es de solo lectura. Otro administrador sí puede cambiárselo.
+- Q: Si dos administradores editan al mismo usuario al mismo tiempo, ¿qué pasa cuando el segundo guarda? → A: Se rechaza el guardado del segundo; se le informa que el usuario fue modificado por otra persona, se le muestran los datos actuales y puede volver a aplicar sus cambios.
+- Q: Además de nombre completo, identificador de acceso y rol, ¿el registro debe pedir algún otro dato en esta versión? (OQ-10) → A: No. Solo esos tres datos, los tres obligatorios.
+- Q: Cuando una empresa tiene muchos usuarios, ¿cómo se presenta el listado? (OQ-7) → A: Por páginas, con controles de página anterior/siguiente e indicando el total de usuarios que coinciden con la búsqueda y los filtros. El tamaño de página no se define aquí.
+- Q: Cuando se modifica un usuario, ¿la trazabilidad debe guardar qué campos cambiaron, con su valor anterior y el nuevo? → A: Sí. Cada modificación registra los campos cambiados con su valor anterior y el nuevo, además de los datos mínimos.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -59,7 +80,13 @@ identificador de acceso, rol y estado, y ningún usuario de B.
 2. **Dado** que el administrador de A está en el listado, **Cuando** observa cada fila, **Entonces** cada usuario muestra como mínimo: nombre completo, identificador de acceso (p. ej. correo), rol y estado (Activo / Inactivo).
 3. **Dado** que un usuario está inactivo, **Cuando** el administrador ve el listado, **Entonces** el estado "Inactivo" se comunica con texto (no solo con color o icono).
 4. **Dado** un usuario de la empresa A sin permiso de gestión de usuarios, **Cuando** intenta acceder a la gestión de usuarios, **Entonces** se le deniega el acceso con un mensaje que indica que no tiene permiso, y no se le muestra ningún dato de usuarios.
-5. **Dado** que la empresa del administrador no tiene usuarios que mostrar según la regla de [OQ-3](#preguntas-abiertas), **Cuando** abre la gestión de usuarios, **Entonces** ve un estado vacío que explica que no hay usuarios registrados y ofrece la acción para registrar uno nuevo (si tiene permiso para ello).
+5. **Dado** que el administrador es el único usuario de su empresa, **Cuando** abre la gestión de usuarios, **Entonces** ve una única fila con su propia cuenta, marcada como "Tú", sin la acción "Desactivar", y tiene disponible la acción "Nuevo usuario" (si tiene permiso para ello).
+6. **Dado** que el listado no tiene ningún usuario que mostrar (situación que no debería ocurrir porque el administrador siempre aparece), **Cuando** se presenta el listado, **Entonces** se muestra un estado vacío que explica que no hay usuarios que mostrar, en lugar de una tabla vacía sin explicación.
+7. **Dado** el listado de la empresa A, **Cuando** el administrador busca por una parte del nombre o del identificador de acceso, **Entonces** el listado muestra solo los usuarios de la empresa A que coinciden.
+8. **Dado** el listado, **Cuando** el administrador filtra por un rol y/o por un estado, combinados o no con una búsqueda, **Entonces** el listado muestra solo los usuarios de su empresa que cumplen todos los criterios aplicados, y se indica qué criterios están activos.
+9. **Dado** que la empresa B tiene un usuario cuyo nombre coincide con la búsqueda, **Cuando** el administrador de la empresa A busca ese nombre, **Entonces** ese usuario no aparece en los resultados ni se refleja en ningún contador.
+10. **Dado** una búsqueda o un filtro sin coincidencias, **Cuando** se aplica, **Entonces** se muestra un mensaje de "sin resultados" distinto del estado vacío, con la opción de limpiar la búsqueda y los filtros.
+11. **Dado** que los usuarios que coinciden con la búsqueda y los filtros no caben en una página, **Cuando** el administrador ve el listado, **Entonces** se indica el total de coincidencias y puede ir a la página siguiente y anterior, también solo con teclado, manteniendo la búsqueda y los filtros aplicados.
 
 ---
 
@@ -77,11 +104,13 @@ momento, empresa y usuario afectado; luego lo reactiva y verifica lo mismo.
 
 **Acceptance Scenarios**:
 
-1. **Dado** un usuario activo de la empresa del administrador, **Cuando** el administrador elige "Desactivar" y la operación se completa, **Entonces** el usuario aparece como "Inactivo" en el listado y en su detalle, y se muestra un mensaje de éxito. (Si debe existir un paso de confirmación previo es una decisión pendiente, ver [OQ-9](#preguntas-abiertas).)
-2. **Dado** un usuario inactivo, **Cuando** el administrador elige "Activar" y la operación se completa, **Entonces** el usuario aparece como "Activo" y se muestra un mensaje de éxito.
-3. **Dado** un usuario activo, **Cuando** el administrador ve sus acciones, **Entonces** se ofrece "Desactivar" y no "Activar"; y a la inversa para un usuario inactivo.
-4. **Dado** que se completó una activación o desactivación, **Cuando** se consulta el registro de trazabilidad, **Entonces** existe una entrada con: actor, fecha y hora, empresa, usuario afectado y tipo de operación (activación / desactivación).
-5. **Dado** que la operación no pudo completarse (p. ej. el usuario cambió de estado entretanto o el servicio no respondió), **Cuando** falla, **Entonces** se muestra un mensaje que indica que la acción no se realizó, el motivo comprensible y qué puede hacer el administrador; el estado mostrado es el estado real del usuario.
+1. **Dado** un usuario activo de la empresa del administrador, **Cuando** el administrador elige "Desactivar", **Entonces** se le pide confirmación mostrando el nombre del usuario afectado, y no se aplica ningún cambio hasta que confirme.
+2. **Dado** que el administrador confirmó la desactivación, **Cuando** la operación se completa, **Entonces** el usuario aparece como "Inactivo" en el listado y en su detalle, y se muestra un mensaje de éxito.
+3. **Dado** que se pidió confirmación de desactivación, **Cuando** el administrador cancela, **Entonces** el estado del usuario no cambia y no se genera registro de trazabilidad.
+4. **Dado** un usuario inactivo, **Cuando** el administrador elige "Activar", **Entonces** la activación se aplica sin paso de confirmación y, al completarse, el usuario aparece como "Activo" y se muestra un mensaje de éxito.
+5. **Dado** un usuario activo, **Cuando** el administrador ve sus acciones, **Entonces** se ofrece "Desactivar" y no "Activar"; y a la inversa para un usuario inactivo.
+6. **Dado** que se completó una activación o desactivación, **Cuando** se consulta el registro de trazabilidad, **Entonces** existe una entrada con: actor, fecha y hora, empresa, usuario afectado y tipo de operación (activación / desactivación).
+7. **Dado** que la operación no pudo completarse (p. ej. el usuario cambió de estado entretanto o el servicio no respondió), **Cuando** falla, **Entonces** se muestra un mensaje que indica que la acción no se realizó, el motivo comprensible y qué puede hacer el administrador; el estado mostrado es el estado real del usuario.
 
 ---
 
@@ -104,27 +133,36 @@ que ve su información en modo solo lectura y que puede volver al listado.
 
 ---
 
-### User Story 4 - Acceder al registro y a la edición de usuarios (Priority: P2)
+### User Story 4 - Registrar y editar usuarios (Priority: P2)
 
-Como administrador del negocio, quiero acceder desde la gestión de usuarios al registro de un
-nuevo usuario y a la edición de uno existente, para mantener actualizadas las cuentas de mi
-empresa.
+Como administrador del negocio, quiero registrar nuevos usuarios de mi empresa y editar los
+existentes mediante formularios completos (datos, validaciones y asignación de rol), para
+mantener actualizadas las cuentas de mi empresa.
 
-**Why this priority**: Es necesaria para una gestión completa, pero el contenido detallado de
-los formularios de alta y edición depende de [OQ-1](#preguntas-abiertas).
+**Why this priority**: Es necesaria para una gestión completa; el listado y la
+activación/desactivación (P1) aportan valor aunque el registro y la edición lleguen después.
 
-**Independent Test**: El administrador pulsa "Nuevo usuario" y llega al registro; pulsa
-"Editar" sobre un usuario y llega a su edición con los datos precargados; al terminar o
-cancelar, vuelve al listado, que refleja el resultado.
+**Independent Test**: El administrador pulsa "Nuevo usuario", completa el formulario con datos
+válidos y un rol, y verifica que el usuario aparece en el listado de su empresa; luego edita
+ese usuario, cambia un dato y su rol, y verifica el cambio; en ambos casos intenta guardar con
+datos inválidos y verifica que se rechaza con mensajes por campo.
 
 **Acceptance Scenarios**:
 
-1. **Dado** que el administrador tiene permiso para registrar usuarios, **Cuando** está en el listado (con o sin usuarios), **Entonces** tiene disponible la acción "Nuevo usuario" que lo lleva al registro.
-2. **Dado** un usuario de su empresa, **Cuando** el administrador elige "Editar", **Entonces** accede a la edición de ese usuario con sus datos actuales precargados.
-3. **Dado** que el administrador completó un registro o edición con éxito, **Cuando** vuelve al listado, **Entonces** el listado refleja el nuevo usuario o los datos modificados.
-4. **Dado** que el administrador cancela el registro o la edición, **Cuando** vuelve al listado, **Entonces** no se ha creado ni modificado ningún usuario.
-5. **Dado** que se completó un alta o una modificación, **Cuando** se consulta el registro de trazabilidad, **Entonces** existe una entrada con actor, fecha y hora, empresa, usuario afectado y tipo de operación.
-6. **Dado** un usuario de la empresa B, **Cuando** el administrador de la empresa A intenta acceder a su edición por cualquier vía, **Entonces** recibe "usuario no encontrado" y no se modifica nada.
+1. **Dado** que el administrador tiene permiso para registrar usuarios, **Cuando** está en el listado (con o sin usuarios), **Entonces** tiene disponible la acción "Nuevo usuario" que lo lleva al formulario de registro.
+2. **Dado** el formulario de registro, **Cuando** el administrador ingresa nombre completo, identificador de acceso y un rol válidos y guarda, **Entonces** se crea el usuario asociado a la empresa actual y aparece en el listado (su estado inicial lo define la futura spec de autenticación, ver [DEP-2](#dependencias-y-decisiones-diferidas)).
+3. **Dado** el formulario de registro o de edición, **Cuando** el administrador guarda con un dato obligatorio vacío o con formato inválido, **Entonces** no se crea ni modifica nada y se muestra, junto a cada campo afectado, un mensaje que indica qué debe corregirse.
+4. **Dado** el formulario de registro o de edición, **Cuando** el administrador elige el rol, **Entonces** solo puede elegir entre los roles disponibles para su empresa.
+5. **Dado** un usuario de su empresa, **Cuando** el administrador elige "Editar", **Entonces** accede al formulario de edición con los datos actuales precargados y, al guardar cambios válidos, el listado y el detalle reflejan los datos modificados.
+6. **Dado** que el administrador cancela el registro o la edición, **Cuando** vuelve al listado, **Entonces** no se ha creado ni modificado ningún usuario.
+7. **Dado** que se completó un alta o una modificación, **Cuando** se consulta el registro de trazabilidad, **Entonces** existe una entrada con actor, fecha y hora, empresa, usuario afectado y tipo de operación; en una modificación, la entrada incluye además cada campo cambiado con su valor anterior y el nuevo.
+8. **Dado** un usuario de la empresa B, **Cuando** el administrador de la empresa A intenta acceder a su edición o guardar cambios sobre él por cualquier vía, **Entonces** recibe "usuario no encontrado" y no se modifica nada.
+9. **Dado** que el formulario recibe un identificador de empresa o de rol ajeno a la empresa actual (por cualquier vía), **Cuando** se guarda, **Entonces** el sistema lo rechaza sin crear ni modificar nada.
+10. **Dado** que la empresa tiene dos administradores activos, **Cuando** uno de ellos edita al otro (datos o rol), **Entonces** el cambio se aplica igual que sobre cualquier otro usuario.
+11. **Dado** que un usuario es el último administrador activo de la empresa, **Cuando** alguien intenta quitarle el rol de administrador mediante la edición, **Entonces** el sistema lo rechaza, no modifica nada y explica el motivo.
+12. **Dado** que existe un límite de usuarios aplicable a la empresa y ya se alcanzó, **Cuando** el administrador intenta registrar un nuevo usuario, **Entonces** el sistema rechaza el registro sin crear nada y muestra un mensaje que indica que se alcanzó el límite de usuarios de la empresa.
+13. **Dado** que el administrador edita su propia cuenta, **Cuando** abre el formulario de edición, **Entonces** el rol se muestra solo como lectura; y si intenta cambiar su propio rol por cualquier otra vía, el sistema lo rechaza sin modificar nada y explica el motivo.
+14. **Dado** que dos administradores abrieron la edición del mismo usuario y el primero ya guardó cambios, **Cuando** el segundo guarda, **Entonces** el sistema rechaza su guardado sin modificar nada, le informa que el usuario fue modificado por otra persona y le muestra los datos actuales para que pueda volver a aplicar sus cambios.
 
 ---
 
@@ -174,13 +212,16 @@ al listado.
 
 - **EC-1 – Acceso a un usuario de otra empresa**: si el administrador de la empresa A usa un enlace directo, un identificador o cualquier otra vía para ver, editar, activar o desactivar un usuario de la empresa B, el sistema responde exactamente igual que ante un usuario inexistente ("usuario no encontrado"), no aplica ningún cambio y no revela nombre, estado ni existencia del usuario.
 - **EC-2 – Cambio de estado concurrente**: si el usuario ya fue desactivado (o activado) por otra persona entre que el administrador cargó la pantalla y ejecutó la acción, el sistema informa que el estado del usuario cambió, muestra el estado actual y no aplica una operación duplicada ni genera un registro de trazabilidad falso.
-- **EC-3 – Usuario eliminado o inexistente**: si el usuario deja de existir mientras el administrador consulta su detalle o intenta una acción, se muestra "usuario no encontrado" y se ofrece volver al listado.
-- **EC-4 – Autodesactivación**: si el administrador intenta desactivar su propia cuenta, el comportamiento depende de [OQ-2](#preguntas-abiertas); mientras no se decida, el sistema **no** debe permitirlo (denegación por defecto, Principio VI) y debe explicar el motivo.
-- **EC-5 – Último administrador activo**: si desactivar a un usuario dejaría a la empresa sin ningún administrador activo, el comportamiento depende de [OQ-2](#preguntas-abiertas); mientras no se decida, el sistema **no** debe permitirlo y debe explicar el motivo.
-- **EC-6 – Pérdida de permiso durante la sesión**: si el administrador pierde el permiso de gestión mientras usa la interfaz, la siguiente operación o consulta se deniega con un mensaje de falta de permiso y no se muestran datos nuevos.
-- **EC-7 – Fallo de comunicación**: si una operación no obtiene respuesta, la interfaz indica que no se pudo confirmar el resultado, no muestra un estado que no esté confirmado y permite reintentar.
-- **EC-8 – Datos incompletos o extensos**: si un usuario tiene un dato opcional vacío o un nombre muy largo, el listado lo muestra de forma legible (p. ej. "—" para vacío) sin romper la fila ni ocultar el rol o el estado.
-- **EC-9 – Usuario sin rol asignado o con rol no reconocido**: el listado lo muestra con el texto "Sin rol asignado" y la interfaz no le atribuye permisos por defecto.
+- **EC-3 – Edición concurrente**: si el usuario fue modificado por otra persona (datos, rol o estado) desde que el administrador abrió el formulario de edición, el guardado se rechaza sin aplicar cambios, se informa del conflicto, se muestran los datos actuales y no se genera un registro de trazabilidad por el intento rechazado como si fuera una modificación.
+- **EC-4 – Usuario eliminado o inexistente**: si el usuario deja de existir mientras el administrador consulta su detalle o intenta una acción, se muestra "usuario no encontrado" y se ofrece volver al listado.
+- **EC-5 – Autodesactivación o cambio del propio rol**: si el administrador intenta desactivar su propia cuenta o cambiar su propio rol por cualquier vía, el sistema lo rechaza, no aplica ningún cambio y explica el motivo; la interfaz no le ofrece "Desactivar" sobre sí mismo y muestra su rol como solo lectura.
+- **EC-6 – Último administrador activo**: si desactivar a un usuario o quitarle el rol de administrador dejaría a la empresa sin ningún administrador activo, el sistema lo rechaza, no aplica ningún cambio y explica el motivo. La regla se cumple también cuando dos administradores intentan desactivarse mutuamente al mismo tiempo: al menos uno permanece activo.
+- **EC-7 – Pérdida de permiso durante la sesión**: si el administrador pierde el permiso de gestión mientras usa la interfaz, la siguiente operación o consulta se deniega con un mensaje de falta de permiso y no se muestran datos nuevos.
+- **EC-8 – Fallo de comunicación**: si una operación no obtiene respuesta, la interfaz indica que no se pudo confirmar el resultado, no muestra un estado que no esté confirmado y permite reintentar.
+- **EC-9 – Datos extensos**: si un usuario tiene un nombre completo o un identificador de acceso muy largo, el listado lo muestra de forma legible sin romper la fila ni ocultar el rol o el estado.
+- **EC-10 – Usuario sin rol asignado o con rol no reconocido** (p. ej. porque su rol dejó de existir en el catálogo de roles, gestionado fuera de esta feature): el listado lo muestra con el texto "Sin rol asignado" y la interfaz no le atribuye permisos por defecto.
+- **EC-11 – Búsqueda sin resultados o con datos de otra empresa**: una búsqueda o filtro sin coincidencias muestra "sin resultados" con la opción de limpiar criterios; una búsqueda que solo coincidiría con usuarios de otra empresa se comporta exactamente igual que una búsqueda sin coincidencias.
+- **EC-12 – Límite de usuarios alcanzado**: si existe un límite aplicable (definido fuera de esta feature, DEP-5) y se alcanzó, el registro se rechaza con un mensaje claro; ningún mensaje revela datos de otras empresas. Si no existe límite definido, el registro no se rechaza por cantidad.
 
 ## Requirements *(mandatory)*
 
@@ -205,88 +246,124 @@ al listado.
 - **FR-009**: El listado DEBE mostrar para cada usuario, como mínimo: nombre completo, identificador de acceso, rol y estado.
 - **FR-010**: El estado DEBE mostrarse con texto explícito ("Activo" / "Inactivo"), pudiendo complementarse con color o icono pero no depender de ellos.
 - **FR-011**: El administrador DEBE poder abrir el detalle de solo lectura de cualquier usuario de su empresa y volver al listado desde él.
-- **FR-012**: Cuando no haya usuarios que mostrar, la interfaz DEBE presentar un estado vacío con un texto explicativo y, si el administrador tiene permiso, la acción para registrar un nuevo usuario.
+- **FR-012**: El listado DEBE incluir la cuenta del propio administrador, identificada como cuenta propia ("Tú"), sin ofrecer sobre ella la acción "Desactivar".
+- **FR-013**: Si el listado no tuviera ningún usuario que mostrar (situación que no debería ocurrir en condiciones normales, dado FR-012), la interfaz DEBE presentar un estado vacío con un texto explicativo y, si el administrador tiene permiso, la acción para registrar un nuevo usuario.
 
-**Registro y edición (acceso)**
+**Búsqueda y filtros**
 
-- **FR-013**: La interfaz DEBE ofrecer una acción "Nuevo usuario" que lleve al registro de un usuario en la empresa actual.
-- **FR-014**: La interfaz DEBE ofrecer una acción "Editar" por usuario que lleve a la edición de ese usuario con sus datos actuales.
-- **FR-015**: Al completar o cancelar un registro o una edición, el administrador DEBE regresar al listado, y este DEBE reflejar el resultado real de la operación.
-- **FR-016**: Todo usuario registrado desde esta interfaz DEBE quedar asociado a la empresa actual, sin posibilidad de elegir otra empresa.
+- **FR-014**: El listado DEBE permitir buscar usuarios por nombre completo o identificador de acceso, incluida la coincidencia parcial.
+- **FR-015**: El listado DEBE permitir filtrar por rol (entre los roles de la empresa actual) y por estado; los filtros y la búsqueda DEBEN poder combinarse, y el resultado DEBE cumplir todos los criterios aplicados.
+- **FR-016**: La búsqueda y los filtros DEBEN operar exclusivamente sobre los usuarios de la empresa actual; sus resultados, contadores y mensajes NO DEBEN reflejar usuarios de otra empresa.
+- **FR-017**: La interfaz DEBE indicar qué búsqueda y filtros están aplicados, permitir limpiarlos, y mostrar un mensaje de "sin resultados" distinto del estado vacío cuando no haya coincidencias.
+- **FR-018**: El listado DEBE presentarse por páginas, con controles para ir a la página anterior y siguiente, e indicar el total de usuarios que coinciden con la búsqueda y los filtros aplicados; cambiar de página NO DEBE descartar la búsqueda ni los filtros. El tamaño de página no se define en esta especificación. El total y la paginación DEBEN contar solo usuarios de la empresa actual.
+- **FR-019**: Los controles de búsqueda, filtros y paginación DEBEN tener nombre accesible, ser operables solo con teclado, y el cambio en la cantidad de resultados DEBE anunciarse a las tecnologías de apoyo.
+
+**Registro y edición**
+
+- **FR-020**: La interfaz DEBE ofrecer una acción "Nuevo usuario" que lleve al formulario de registro de un usuario en la empresa actual.
+- **FR-021**: La interfaz DEBE ofrecer una acción "Editar" por usuario que lleve al formulario de edición de ese usuario con sus datos actuales precargados.
+- **FR-022**: Al completar o cancelar un registro o una edición, el administrador DEBE regresar al listado, y este DEBE reflejar el resultado real de la operación.
+- **FR-023**: Todo usuario registrado desde esta interfaz DEBE quedar asociado a la empresa actual, sin posibilidad de elegir otra empresa.
+- **FR-024**: Los formularios de registro y edición DEBEN capturar exactamente tres datos, todos obligatorios: nombre completo, identificador de acceso y rol. En la edición, el nombre completo y el rol son editables (salvo el propio rol, ver FR-035); si el identificador de acceso es editable lo define la futura spec de autenticación ([DEP-4](#dependencias-y-decisiones-diferidas)).
+- **FR-025**: El sistema DEBE validar los datos antes de crear o modificar un usuario; si algún dato obligatorio falta o es inválido, NO DEBE crear ni modificar nada y DEBE indicar, junto a cada campo afectado, qué debe corregirse.
+- **FR-026**: La asignación de rol DEBE limitarse a los roles disponibles para la empresa actual; el sistema DEBE rechazar cualquier rol ajeno a ella. El catálogo de roles se gestiona fuera de esta feature.
+- **FR-027**: El sistema DEBE rechazar un identificador de acceso duplicado según la regla de unicidad que defina la futura spec de autenticación ([DEP-3](#dependencias-y-decisiones-diferidas)). Cualquiera que sea esa regla, el mensaje de identificador duplicado NO DEBE revelar que el identificador existe en otra empresa (Principio I). La credencial inicial y el estado inicial del nuevo usuario los define esa misma spec ([DEP-2](#dependencias-y-decisiones-diferidas)).
+- **FR-028**: Si existe un límite de usuarios aplicable a la empresa actual (definido fuera de esta feature) y se ha alcanzado, el sistema DEBE rechazar el registro de nuevos usuarios sin crear nada y DEBE mostrar un mensaje claro que indique que se alcanzó el límite. Esta feature NO define la cifra, a quién aplica ni cómo se cuenta (p. ej. si incluye usuarios inactivos o si afecta a las reactivaciones); eso es una decisión comercial externa ([DEP-5](#dependencias-y-decisiones-diferidas)).
+- **FR-029**: Los formularios DEBEN cumplir los requisitos de accesibilidad: cada campo con etiqueta visible y nombre accesible, operables solo con teclado, y mensajes de error asociados al campo que no dependan únicamente del color.
 
 **Activación y desactivación**
 
-- **FR-017**: La interfaz DEBE ofrecer "Desactivar" para usuarios activos y "Activar" para usuarios inactivos, y nunca ambas a la vez para el mismo usuario.
-- **FR-018**: Tras una activación o desactivación exitosa, el nuevo estado DEBE reflejarse en el listado y en el detalle, acompañado de un mensaje de éxito.
-- **FR-019**: Desactivar un usuario NO DEBE eliminar su cuenta ni su información; la cuenta DEBE poder reactivarse.
-- **FR-020**: Mientras [OQ-2](#preguntas-abiertas) no esté resuelta, el sistema DEBE impedir que un administrador desactive su propia cuenta y que se desactive al último administrador activo de la empresa, explicando el motivo.
-- **FR-021**: Si el estado del usuario cambió desde que se cargó la pantalla, el sistema DEBE informar del cambio, mostrar el estado actual y no aplicar una operación duplicada.
+- **FR-030**: La interfaz DEBE ofrecer "Desactivar" para usuarios activos y "Activar" para usuarios inactivos, y nunca ambas a la vez para el mismo usuario.
+- **FR-031**: Tras una activación o desactivación exitosa, el nuevo estado DEBE reflejarse en el listado y en el detalle, acompañado de un mensaje de éxito.
+- **FR-032**: La desactivación DEBE requerir confirmación explícita que muestre el nombre del usuario afectado; cancelar NO DEBE producir cambios ni registro de trazabilidad. La activación NO requiere confirmación.
+- **FR-033**: Desactivar un usuario NO DEBE eliminar su cuenta ni su información; la cuenta DEBE poder reactivarse.
+- **FR-034**: El sistema DEBE impedir que cualquier usuario desactive su propia cuenta, explicando el motivo.
+- **FR-035**: El sistema DEBE impedir que cualquier usuario cambie su propio rol, explicando el motivo; en la edición de la propia cuenta, el rol DEBE mostrarse como solo lectura. El cambio de rol de un administrador solo puede hacerlo otro administrador de la empresa.
+- **FR-036**: El sistema DEBE impedir cualquier desactivación o cambio de rol que deje a la empresa sin al menos un administrador activo (usuario activo con permiso de administración de usuarios), incluso ante solicitudes simultáneas, explicando el motivo.
+- **FR-037**: Todos los administradores de una empresa tienen el mismo nivel: un administrador PUEDE editar, cambiar el rol, activar y desactivar a otro administrador de su empresa, sujeto a FR-034 y FR-036. No existe jerarquía entre administradores.
+- **FR-038**: Si el estado del usuario cambió desde que se cargó la pantalla, el sistema DEBE informar del cambio, mostrar el estado actual y no aplicar una operación duplicada.
+- **FR-039**: Si el usuario fue modificado por otra persona desde que el administrador abrió su edición, el sistema DEBE rechazar el guardado sin aplicar cambios, informar que el usuario fue modificado por otra persona y mostrar los datos actuales para que el administrador pueda volver a aplicar sus cambios. Ningún cambio confirmado DEBE sobrescribirse sin aviso.
 
 **Mensajes de error**
 
-- **FR-022**: Cuando una operación no pueda realizarse, la interfaz DEBE mostrar un mensaje que indique qué acción no se realizó, el motivo en lenguaje comprensible y, cuando sea posible, qué puede hacer el administrador (reintentar, volver al listado, contactar a quien corresponda).
-- **FR-023**: Los mensajes de error NO DEBEN mostrar detalles técnicos internos ni información de otras empresas.
-- **FR-024**: La interfaz NO DEBE mostrar como confirmado un cambio que el sistema no ha confirmado.
+- **FR-040**: Cuando una operación no pueda realizarse, la interfaz DEBE mostrar un mensaje que indique qué acción no se realizó, el motivo en lenguaje comprensible y, cuando sea posible, qué puede hacer el administrador (reintentar, volver al listado, contactar a quien corresponda).
+- **FR-041**: Los mensajes de error NO DEBEN mostrar detalles técnicos internos ni información de otras empresas.
+- **FR-042**: La interfaz NO DEBE mostrar como confirmado un cambio que el sistema no ha confirmado.
 
 **Trazabilidad (Principio V)**
 
-- **FR-025**: El sistema DEBE registrar cada activación, desactivación, alta y modificación de usuario con: actor, fecha y hora, empresa, usuario afectado y tipo de operación.
-- **FR-026**: Los registros de trazabilidad NO DEBEN contener credenciales ni secretos y NO DEBEN poder ser alterados ni borrados por quien originó la operación.
-- **FR-027**: Los intentos denegados de operar sobre usuarios de otra empresa DEBEN poder registrarse para auditoría, sin exponer esa información al administrador que los intentó.
+- **FR-043**: El sistema DEBE registrar cada activación, desactivación, alta y modificación de usuario con: actor, fecha y hora, empresa, usuario afectado y tipo de operación.
+- **FR-044**: En cada modificación de un usuario, el registro de trazabilidad DEBE incluir además los campos cambiados, cada uno con su valor anterior y su valor nuevo. Los campos no modificados NO se registran como cambiados.
+- **FR-045**: Los registros de trazabilidad NO DEBEN contener credenciales ni secretos y NO DEBEN poder ser alterados ni borrados por quien originó la operación.
+- **FR-046**: Los intentos denegados de operar sobre usuarios de otra empresa DEBEN poder registrarse para auditoría, sin exponer esa información al administrador que los intentó.
 
 **Accesibilidad**
 
-- **FR-028**: Todas las acciones principales (Nuevo usuario, Ver detalle, Editar, Activar, Desactivar, completar o cerrar diálogos, volver) DEBEN poder ejecutarse únicamente con teclado.
-- **FR-029**: Todo control interactivo DEBE tener un nombre accesible que describa su función; las acciones por fila DEBEN identificar al usuario afectado.
-- **FR-030**: Todo diálogo que abra la interfaz (incluida una eventual confirmación, si se decide en OQ-9) DEBE recibir el foco al abrirse y devolverlo a un punto lógico al cerrarse.
-- **FR-031**: Los mensajes de éxito y error DEBEN ser anunciados a las tecnologías de apoyo y no depender únicamente del color.
+- **FR-047**: Todas las acciones principales (Nuevo usuario, Ver detalle, Editar, Activar, Desactivar, confirmar o cancelar la desactivación, completar o cerrar diálogos, volver) DEBEN poder ejecutarse únicamente con teclado.
+- **FR-048**: Todo control interactivo DEBE tener un nombre accesible que describa su función; las acciones por fila DEBEN identificar al usuario afectado.
+- **FR-049**: Todo diálogo que abra la interfaz (incluida la confirmación de desactivación) DEBE recibir el foco al abrirse y devolverlo a un punto lógico al cerrarse.
+- **FR-050**: Los mensajes de éxito y error DEBEN ser anunciados a las tecnologías de apoyo y no depender únicamente del color.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Empresa**: Negocio cliente de Kryon. Delimita qué usuarios puede ver y gestionar un administrador. Todo usuario pertenece a una empresa.
-- **Usuario**: Cuenta de una persona que opera en Kryon dentro de una empresa. Atributos relevantes para esta feature: nombre completo, identificador de acceso, rol, estado (Activo / Inactivo), empresa a la que pertenece.
+- **Usuario**: Cuenta de una persona que opera en Kryon dentro de una empresa. Atributos relevantes para esta feature: nombre completo, identificador de acceso, rol, estado (Activo / Inactivo; cualquier estado adicional lo define la futura spec de autenticación, DEP-2), empresa a la que pertenece.
 - **Rol**: Conjunto de permisos que determina qué puede hacer un usuario. En esta feature solo se muestra y se usa para decidir qué acciones están permitidas; su catálogo y definición quedan fuera de alcance.
-- **Registro de trazabilidad**: Constancia de una operación crítica sobre un usuario: actor, momento, empresa, usuario afectado y tipo de operación.
+- **Registro de trazabilidad**: Constancia de una operación crítica sobre un usuario: actor, momento, empresa, usuario afectado y tipo de operación; en las modificaciones, también los campos cambiados con su valor anterior y nuevo.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
 - **SC-001**: En las pruebas de aislamiento con al menos dos empresas, el 100 % de los intentos de un administrador de la empresa A de ver, editar, activar o desactivar usuarios de la empresa B son rechazados, y 0 datos de la empresa B aparecen en listados, detalles o mensajes.
-- **SC-002**: El 100 % de las activaciones, desactivaciones, altas y modificaciones completadas generan un registro de trazabilidad con los 5 datos exigidos (actor, momento, empresa, usuario afectado, tipo de operación).
+- **SC-002**: El 100 % de las activaciones, desactivaciones, altas y modificaciones completadas generan un registro de trazabilidad con los 5 datos exigidos (actor, momento, empresa, usuario afectado, tipo de operación), y el 100 % de las modificaciones registran cada campo cambiado con su valor anterior y nuevo.
 - **SC-003**: El 100 % de las acciones principales se pueden completar usando solo teclado, y el 100 % de los controles interactivos tienen nombre accesible, verificado en revisión de accesibilidad.
 - **SC-004**: El 100 % de las operaciones fallidas o denegadas presentan un mensaje que indica la acción no realizada y el motivo; 0 mensajes contienen detalles técnicos internos.
 - **SC-005**: El 100 % de las acciones mostradas a un administrador corresponden a permisos que efectivamente tiene (0 acciones visibles que el sistema luego rechace por falta de permiso, salvo cambio de permisos durante la sesión).
+- **SC-006**: En las pruebas de reglas de administración, el 100 % de los intentos de autodesactivación, de cambio del propio rol y de desactivar o quitar el rol al último administrador activo de una empresa son rechazados sin aplicar cambios, incluidos los intentos simultáneos.
+- **SC-007**: El 100 % de las desactivaciones completadas fueron precedidas por una confirmación explícita, y el 100 % de las confirmaciones canceladas no producen cambios.
+- **SC-008**: En las pruebas de búsqueda y filtros con al menos dos empresas, el 100 % de los resultados pertenecen a la empresa actual y cumplen todos los criterios aplicados.
+- **SC-009**: En las pruebas de edición concurrente, el 100 % de los guardados sobre un usuario modificado por otra persona desde que se abrió su edición son rechazados, y 0 cambios confirmados se pierden sin aviso.
 
-## Preguntas Abiertas
+## Dependencias y Decisiones Diferidas
 
-Decisiones de negocio pendientes, a resolver con `/speckit-clarify`. No se asumen reglas del
-Kryon antiguo. Cuando una pregunta afecta a la seguridad o al acceso, rige provisionalmente el
-comportamiento más restrictivo (Principio VI); en las demás, la spec no toma posición
-("Sin definir").
+Decisiones que **no pertenecen a esta feature**: dependen de otras especificaciones o del
+negocio. No son preguntas abiertas de la Gestión de Usuarios y **no bloquean** su plan: esta
+spec ya define cómo se comporta la gestión de usuarios en cada caso, y solo delega el dato o la
+regla que corresponde a otra spec. Cuando esas decisiones se tomen, esta spec se actualizará si
+alguna de ellas cambia su comportamiento (Principio III).
 
-| ID | Pregunta | Impacto | Comportamiento provisional |
-|----|----------|---------|----------------------------|
-| **OQ-1** | ¿Los formularios de registro y edición de usuario (campos, validaciones, asignación de rol, credencial inicial) forman parte de esta feature o de una especificación separada? | Alcance | Esta spec cubre solo el **acceso** al registro/edición y el retorno al listado. |
-| **OQ-2** | ¿Puede un administrador desactivarse a sí mismo? ¿Puede quedar una empresa sin ningún administrador activo? | Seguridad / continuidad del negocio | Ambas acciones se **impiden** (FR-020). |
-| **OQ-3** | ¿El administrador que consulta aparece en el listado? En consecuencia, ¿cuándo se muestra el estado vacío (sin ningún usuario, o sin usuarios distintos del propio administrador)? | Experiencia de usuario | El administrador aparece en el listado identificado como la cuenta propia; el estado vacío se muestra cuando no hay usuarios que mostrar. |
-| **OQ-4** | ¿Puede un administrador editar, activar o desactivar a otro administrador de la misma empresa, o existe jerarquía entre administradores? | Permisos | Se permite solo lo que el permiso del administrador conceda explícitamente; sin permiso explícito, se deniega. |
-| **OQ-5** | ¿Qué efecto inmediato tiene la desactivación sobre las sesiones abiertas del usuario desactivado? | Seguridad | Fuera de alcance de esta feature (depende de autenticación); debe resolverse en la spec correspondiente. |
-| **OQ-6** | ¿Existen estados de usuario adicionales a Activo / Inactivo (p. ej. "Pendiente de activación", "Bloqueado")? | Alcance / modelo | Solo se consideran Activo e Inactivo. |
-| **OQ-7** | ¿Se requiere búsqueda o filtros (por nombre, rol, estado) en el listado? ¿Cómo debe navegarse el listado cuando la empresa tiene muchos usuarios? | Experiencia de usuario | **Sin definir.** Esta spec no establece búsqueda, filtros ni forma de navegación del listado. |
-| **OQ-8** | ¿Existe un límite de usuarios por empresa en el nuevo Kryon (por ejemplo, ligado al plan contratado)? | Negocio / comercial | **Sin definir.** Esta spec no establece un límite ni su ausencia. Lo único definido es que el límite de cuatro usuarios del Kryon antiguo **no** se hereda automáticamente. |
-| **OQ-9** | ¿Debe pedirse confirmación antes de desactivar (o activar) un usuario? Si es así, ¿qué información debe mostrar? | Experiencia de usuario / seguridad | **Sin definir.** Esta spec no exige ni prohíbe un paso de confirmación. |
+| ID | Decisión diferida | Origen | Responsable | Qué define ya esta feature |
+|----|-------------------|--------|-------------|----------------------------|
+| **DEP-1** | Efecto de desactivar un usuario sobre sus sesiones abiertas. | OQ-5 | Futura spec de autenticación | La desactivación cambia el estado del usuario a Inactivo, requiere confirmación, se registra en la trazabilidad y no elimina la cuenta (FR-031 a FR-033, FR-043). |
+| **DEP-2** | Estado inicial de un usuario recién registrado, forma de obtener su credencial inicial y existencia de estados adicionales a Activo / Inactivo. | OQ-6, OQ-12 | Futura spec de autenticación | El registro crea el usuario en la empresa actual con sus tres datos obligatorios y lo registra en la trazabilidad (FR-020 a FR-029, FR-043). Esta feature gestiona los estados Activo e Inactivo. |
+| **DEP-3** | Ámbito de unicidad del identificador de acceso (por empresa o en todo Kryon). | OQ-11 | Futura spec de autenticación | Se rechaza el duplicado según la regla que se defina, con un mensaje que no revela datos de otras empresas (FR-027). |
+| **DEP-4** | Si el identificador de acceso puede editarse después del registro. | OQ-10 (parte pendiente) | Futura spec de autenticación | En la edición son editables el nombre completo y el rol, salvo el propio rol (FR-024, FR-035). |
+| **DEP-5** | Existencia, cifra y política del límite de usuarios por empresa (a quién aplica, cómo se cuenta, si afecta a reactivaciones). | OQ-8 (parte pendiente) | Decisión comercial externa | Si existe un límite y se alcanzó, el registro se rechaza con un mensaje claro (FR-028, EC-12). El límite de cuatro usuarios del Kryon antiguo **no** se hereda. |
+
+### Registro de preguntas abiertas
+
+Todas las preguntas abiertas de esta feature están resueltas o reubicadas; no queda ninguna
+pregunta abierta propia de la Gestión de Usuarios.
+
+| ID | Estado |
+|----|--------|
+| OQ-1, OQ-2, OQ-3, OQ-4, OQ-7, OQ-9 | Resueltas (ver Clarifications). |
+| OQ-8, OQ-10 | Resueltas en lo que corresponde a esta feature; la parte pendiente pasa a DEP-5 y DEP-4. |
+| OQ-5, OQ-6, OQ-11, OQ-12 | Reubicadas como dependencias DEP-1, DEP-2 y DEP-3. |
 
 ## Fuera de Alcance
 
 - Autenticación e inicio de sesión.
 - Recuperación o cambio de contraseña.
+- Credencial inicial, estado inicial y efecto de la desactivación sobre sesiones abiertas (DEP-1, DEP-2).
+- Reglas de unicidad y editabilidad del identificador de acceso (DEP-3, DEP-4).
+- Cifra y política comercial del límite de usuarios (DEP-5).
 - Gestión completa del catálogo de roles (crear, modificar o eliminar roles).
 - Definición detallada de permisos individuales.
 - Administración de usuarios de otras empresas, incluso por administradores de la plataforma.
 - Configuración general de la empresa.
 - Eliminación definitiva de usuarios (no solicitada; la desactivación no elimina).
-- Contenido detallado de los formularios de registro y edición, salvo decisión contraria en OQ-1.
 - Implementación técnica (tecnologías, arquitectura, almacenamiento, interfaces de integración).
 
 ## Assumptions
