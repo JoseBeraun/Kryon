@@ -4,7 +4,7 @@
 **Módulo:** Configuración de Empresa y Aislamiento
 **Funcionalidad:** Gestión de Usuarios
 **Tipo:** Spec de ingeniería inversa — Día 2
-**Estado:** En revisión
+**Estado:** Validada
 
 ---
 
@@ -451,11 +451,11 @@ Durante la ingeniería inversa de Gestión de Usuarios se realizó lo siguiente:
 11. Se agregaron casos borde descubiertos durante la revisión.
 12. Se actualizó la spec de acuerdo con el comportamiento encontrado.
 
-### Pendiente para cerrar formalmente el Día 2
+### Cierre formal del Día 2
 
-- realizar la validación final de la spec contra el checklist;
-- solicitar la revisión del mentor;
-- incorporar cualquier corrección solicitada por el mentor;
-- realizar la kata sin IA indicada por el plan, si todavía no se ha realizado.
+- Se realizó la validación final de la spec contra el checklist.
+- La spec fue revisada por el mentor.
+- Se incorporaron las correcciones solicitadas durante la revisión.
+- Se realizó la kata sin IA indicada por el plan.
 
 Esta spec corresponde a la práctica manual de ingeniería inversa del Día 2 y no utiliza `/speckit-specify`.
