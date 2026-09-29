@@ -57,7 +57,7 @@ esas specs (ver [research.md](research.md) §R8 y la sección *Dependencias exte
 
 | Principio / Puerta | Cómo lo cumple el plan | Estado |
 |--------------------|------------------------|--------|
-| **I. Aislamiento multiempresa** | `EmpresaId` sale de la sesión verificada (`IContextoSolicitud`) y nunca de la solicitud. Hay filtro global de EF Core por empresa y RLS de SQL Server con `SESSION_CONTEXT` como segunda capa. Un recurso de otra empresa responde 404, igual que uno inexistente. Hay pruebas A/B obligatorias en la API y en la base de datos (quickstart §V1). | ✅ |
+| **I. Aislamiento multiempresa** | `EmpresaId` sale de la sesión verificada (`IContextoSolicitud`, interfaz en `Kryon.Core/Seguridad`, implementada en `Kryon.Api/Seguridad`) y nunca de la solicitud. Hay filtro global de EF Core por empresa y RLS de SQL Server con `SESSION_CONTEXT` como segunda capa. Un recurso de otra empresa responde 404, igual que uno inexistente. Hay pruebas A/B obligatorias en la API y en la base de datos (quickstart §V1). | ✅ |
 | **II. Control de acceso por rol** | Cada endpoint usa políticas de autorización del servidor. Cada política se asocia a un permiso del catálogo mediante configuración; los nombres actuales son provisionales (research §R4). La interfaz solo oculta acciones a partir de `accionesPermitidas`, calculadas por la API. Hay pruebas de casos denegados para cada operación. | ✅ |
 | **III. Especificación antes de implementación** | La spec está revisada y tiene 3 sesiones de clarify. Las dependencias externas están registradas (DEP-1 a DEP-5) y el plan **no fija** reglas que pertenecen a otras specs: diseña los puntos de integración y deja su comportamiento a esas specs. Las partes cuyo comportamiento depende de ellas no se implementan hasta que estén definidas (sección *Dependencias externas*). | ✅ |
 | **IV. Criterios verificables y pruebas** | Cada SC-001 a SC-009 tiene un escenario de validación en [quickstart.md](quickstart.md) y cada código de error en [contracts/](contracts/) tiene al menos una prueba. | ✅ |
@@ -100,16 +100,20 @@ specs/001-gestion-usuarios/
 Kryon.sln
 src/
 ├── Kryon.Api/                     # ASP.NET Core Web API (única autoridad de permisos y empresa)
-│   ├── Usuarios/                  # Endpoints de esta feature, mapeo de errores a ProblemDetails
-│   └── Seguridad/                 # IContextoSolicitud, políticas de autorización, auditoría de denegaciones
-├── Kryon.Core/                    # Dominio + casos de uso (sin dependencias de infraestructura)
-│   └── Usuarios/                  # Usuario, reglas (último admin, autogestión), casos de uso, puntos de integración DEP-*
+│   ├── Usuarios/                  # Endpoints de esta feature, mapeo de errores de dominio a ProblemDetails, registro UsuarioNoAccesible
+│   ├── Seguridad/                 # Implementación de IContextoSolicitud desde claims, políticas de autorización, IdentidadPrueba (solo Development/Test), CORS de pruebas, filtro de telemetría
+│   └── Errores/                   # Manejador global de excepciones inesperadas (500 error-interno)
+├── Kryon.Core/                    # Dominio + casos de uso (sin dependencias de infraestructura ni de la API)
+│   ├── Seguridad/                 # Interfaz IContextoSolicitud (usuario, empresa, capacidades)
+│   └── Usuarios/                  # Usuario, reglas (último admin, autogestión), casos de uso, opciones, puntos de integración DEP-* (Integraciones/), eventos (Eventos/)
 ├── Kryon.Infrastructure/          # EF Core, SQL Server, RLS, auditoría, bloqueo por empresa
 │   ├── Persistencia/              # KryonDbContext, configuraciones, migraciones, interceptor de SESSION_CONTEXT
-│   └── Usuarios/                  # Repositorio de usuarios; adaptadores de los puntos de integración cuando existan
+│   └── Usuarios/                  # Consulta y repositorio de usuarios, auditoría, bloqueo; adaptadores de los puntos de integración cuando existan (Integraciones/)
 ├── Kryon.Contracts/               # DTOs compartidos entre la API y Blazor (solicitudes, respuestas, códigos de error)
 └── Kryon.Web/                     # Blazor WebAssembly
-    └── Usuarios/                  # Páginas: listado, detalle, formulario; diálogo de confirmación
+    ├── Usuarios/                  # Páginas: listado, detalle, formulario; filtros, paginación, diálogo de confirmación; ClienteUsuarios; TextosErrores
+    ├── Compartido/                # Componentes compartidos (Mensajes: regiones aria-live y role="alert")
+    └── Desarrollo/                # IdentidadPruebaHandler (solo Development; no es la autenticación real)
 
 tests/
 ├── Kryon.Core.Tests/              # Unitarias: reglas de dominio y casos de uso
@@ -119,6 +123,8 @@ tests/
 ```
 
 **Structure Decision**: aplicación web con una API y una SPA Blazor en una sola solución .NET.
+`IContextoSolicitud` es una interfaz de `Kryon.Core/Seguridad` porque los casos de uso la necesitan y Core
+no puede depender de la API; `Kryon.Api/Seguridad` la implementa a partir de los claims.
 `Kryon.Core` concentra el dominio y los casos de uso, así que las reglas de negocio se prueban sin
 base de datos. `Kryon.Contracts` evita duplicar DTOs entre la API y Blazor, porque ambos usan C#.
 Cada proyecto organiza su código por feature (`Usuarios/`), para que las futuras features de Kryon
@@ -143,6 +149,12 @@ de la feature que depende de ella. No se inventa ningún comportamiento sustitut
 - **Se entregan sin depender de DEP-2 a DEP-5**: las historias 1, 2, 3, 5 y 6, y la edición de nombre completo y rol de la historia 4.
 - **Dependen de la futura spec de autenticación y de la decisión comercial**: el registro de usuarios (FR-020, FR-027, FR-028) y la edición del identificador (DEP-4). Se diseñan y sus contratos quedan fijados, pero su implementación final y su entrega esperan a que DEP-2, DEP-3, DEP-4 y DEP-5 estén definidas. `/speckit-tasks` debe marcar esas tareas como bloqueadas por esas dependencias.
 - **Mecanismo de entrega (feature / release gating, no regla de negocio)**: mientras esas dependencias estén pendientes, `POST /api/usuarios`, el botón "Nuevo usuario" y `acciones.editarIdentificador` quedan detrás de los gates `RegistroUsuarios` y `EdicionIdentificador` (definidos en [tasks.md](tasks.md)). Un gate cerrado significa que la función aún no forma parte del producto desplegado, no que el negocio la prohíba.
+
+## Notas de alcance y coordinación
+
+- **Coordinación con el catálogo de roles (U2)**: la futura feature de catálogo de roles debe garantizar que la definición de administrador y las capacidades necesarias para administrar usuarios sean coherentes, evitando que una empresa conserve administradores activos pero ninguno tenga las capacidades necesarias para gestionar usuarios. Es una nota de coordinación para esa feature; **no** es una regla nueva de la Gestión de Usuarios, y FR-036 no cambia.
+- **Despliegue en Azure (G3)**: la infraestructura y la automatización de despliegue (App Service, Static Web Apps, Key Vault, Managed Identity, etc.) pertenecen al trabajo de plataforma/deployment y quedan fuera del alcance de esta feature. La feature queda preparada y configurable para Azure según research §R12 (configuración externa, secretos fuera del repositorio, migraciones como script, telemetría sin datos sensibles).
+- **CI (F1)**: Proveedor CI provisional: GitHub Actions por estar el repositorio en GitHub. Debe confirmarse con el estándar del equipo antes de considerarlo una decisión transversal de Kryon.
 
 ## Complexity Tracking
 

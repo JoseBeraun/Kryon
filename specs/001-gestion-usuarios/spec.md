@@ -341,6 +341,15 @@ alguna de ellas cambia su comportamiento (Principio III).
 | **DEP-4** | Si el identificador de acceso puede editarse después del registro. | OQ-10 (parte pendiente) | Futura spec de autenticación | En la edición son editables el nombre completo y el rol, salvo el propio rol (FR-024, FR-035). |
 | **DEP-5** | Existencia, cifra y política del límite de usuarios por empresa (a quién aplica, cómo se cuenta, si afecta a reactivaciones). | OQ-8 (parte pendiente) | Decisión comercial externa | Si existe un límite y se alcanzó, el registro se rechaza con un mensaje claro (FR-028, EC-12). El límite de cuatro usuarios del Kryon antiguo **no** se hereda. |
 
+### Verificación de los escenarios de registro
+
+Esta aclaración trata solo de **cómo se verifican** los escenarios y no añade ninguna regla de negocio:
+
+- Los escenarios de aceptación de registro de usuarios (historia 4) **siguen siendo criterios válidos** de esta feature y no cambian.
+- Mientras DEP-2, DEP-3 y DEP-5 estén pendientes, esos escenarios se pueden verificar con **dobles de prueba** de los puntos de integración correspondientes.
+- La **verificación final** con el comportamiento real y la **entrega en producción** del registro quedan pendientes hasta que esas dependencias externas estén definidas.
+- El *feature gate* que mantiene el registro fuera del producto desplegado mientras tanto es un **mecanismo técnico de entrega**, no una prohibición de negocio.
+
 ### Registro de preguntas abiertas
 
 Todas las preguntas abiertas de esta feature están resueltas o reubicadas; no queda ninguna

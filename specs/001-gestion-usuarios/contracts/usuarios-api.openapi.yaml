@@ -9,6 +9,8 @@ info:
     - La empresa SIEMPRE se deriva del token verificado. Ninguna solicitud acepta `empresaId` (FR-001, FR-023).
     - Un usuario de otra empresa responde exactamente igual que uno inexistente: 404 `usuario-no-encontrado` (FR-003).
     - Todo error es ProblemDetails (RFC 9457) sin detalles internos (FR-041).
+    - Cualquier operación puede responder 500 `error-interno` (respuesta común `ErrorInterno`) ante una excepción
+      no controlada. Ese cuerpo es genérico: sin stack trace, SQL, rutas del servidor, nombres internos ni secretos.
     - Autenticación: la define la futura spec de autenticación. Aquí solo se declara un esquema bearer.
     - `x-permiso`: nombres PROVISIONALES de contrato (placeholders). No son un catálogo definitivo; la API los
       asocia por configuración a los permisos reales del catálogo de roles.
@@ -41,6 +43,7 @@ paths:
               schema: { $ref: '#/components/schemas/PaginaUsuarios' }
         '400': { $ref: '#/components/responses/Validacion' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
     post:
       operationId: registrarUsuario
@@ -66,6 +69,7 @@ paths:
               schema: { $ref: '#/components/schemas/DetalleUsuario' }
         '400': { $ref: '#/components/responses/Validacion' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '409':
           description: |
@@ -88,6 +92,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/RolResumen' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
 
   /usuarios/{id}:
@@ -106,6 +111,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DetalleUsuario' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
     put:
@@ -129,6 +135,7 @@ paths:
               schema: { $ref: '#/components/schemas/DetalleUsuario' }
         '400': { $ref: '#/components/responses/Validacion' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
         '409':
@@ -158,6 +165,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DetalleUsuario' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
         '409':
@@ -184,6 +192,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/DetalleUsuario' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
+        '500': { $ref: '#/components/responses/ErrorInterno' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
         '412': { $ref: '#/components/responses/Modificado' }
@@ -214,6 +223,12 @@ components:
     Modificado:
       description: '`usuario-modificado`: la versión cambió desde que se cargó. `actual` trae los datos vigentes (FR-038, FR-039).'
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemaConflictoVersion' } } }
+    ErrorInterno:
+      description: |
+        `error-interno`: excepción no controlada. ProblemDetails genérico con `type`
+        `https://kryon.app/errores/error-interno`, `title` fijo y `codigo: error-interno`. NUNCA incluye stack trace,
+        consultas SQL, rutas del servidor, nombres de clases o tipos internos, secretos ni datos de otra empresa.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problema' } } }
     FaltaIfMatch:
       description: '`falta-version`: la operación requiere If-Match.'
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problema' } } }
@@ -314,6 +329,7 @@ components:
             - ultimo-administrador
             - usuario-modificado
             - falta-version
+            - error-interno
 
     ProblemaValidacion:
       allOf:

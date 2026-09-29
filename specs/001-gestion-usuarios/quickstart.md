@@ -27,7 +27,10 @@ dotnet test tests/Kryon.E2E.Tests          # levanta API + Web en local
 ```
 
 Para explorar a mano: `dotnet run --project src/Kryon.Api` y `dotnet run --project src/Kryon.Web`,
-y entrar con el esquema de autenticación de desarrollo como `ana` (empresa A).
+y entrar como `ana` (empresa A) con `IdentidadPrueba`: los encabezados `X-Kryon-Prueba-UsuarioId`,
+`X-Kryon-Prueba-EmpresaId` y `X-Kryon-Prueba-Capacidades` (en Blazor los añade el handler de Development,
+configurado en `wwwroot/appsettings.Development.json`). `IdentidadPrueba` solo existe en los entornos
+Development y Test y **no** representa la autenticación real de Kryon, que definirá su propia spec.
 
 ## Escenarios de validación
 

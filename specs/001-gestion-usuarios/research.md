@@ -31,7 +31,7 @@ Azure como nube. Este documento resuelve las decisiones técnicas derivadas. No 
   5. Si se busca un recurso de otra empresa, la respuesta es `404 usuario-no-encontrado`, idéntica a la de un recurso inexistente.
 - **Rationale**: cumple el Principio I y las restricciones de seguridad de la Constitución: la empresa nunca sale de un parámetro del cliente, hay defensa en profundidad y no se revela la existencia de datos de otra empresa. RLS protege incluso ante SQL escrito a mano o un `IgnoreQueryFilters()` accidental.
 - **Alternatives considered**: solo filtro de EF Core (una sola capa, frágil); una base de datos por empresa (costosa de operar en Azure SQL con muchas empresas, y las reglas de negocio no lo exigen); pasar `empresaId` en la URL (lo prohíbe la Constitución).
-- **Integración con la autenticación**: el proveedor de identidad y el formato del token los define la futura spec de autenticación. Esta feature solo depende de que el token verificado incluya el identificador del usuario, el de su empresa y sus permisos. En las pruebas se usa un `AuthenticationHandler` de prueba que emite esos claims.
+- **Integración con la autenticación**: el proveedor de identidad y el formato del token los define la futura spec de autenticación. Esta feature solo depende de que el token verificado incluya el identificador del usuario, el de su empresa y sus permisos. En Development y en las pruebas automatizadas se usa el esquema `IdentidadPrueba`, que convierte encabezados `X-Kryon-Prueba-*` en esos mismos claims. Solo existe en los entornos `Development` y `Test` y no define la autenticación real.
 
 ## R4. Modelo de permisos consumido
 
@@ -48,6 +48,7 @@ Azure como nube. Este documento resuelve las decisiones técnicas derivadas. No 
   Cada acción se protege con una política de autorización de ASP.NET Core. La API calcula `accionesPermitidas` para cada usuario del listado y del detalle combinando los permisos con las reglas de autogestión (FR-034 y FR-035) y el estado actual.
 - **Rationale**: la historia 5 exige mostrar y denegar acciones una por una. El catálogo y la definición de permisos están fuera de alcance, así que esta feature solo documenta qué **capacidades** necesita y deja sus nombres como configurables. Si falta la asociación de una política, esa política deniega (Principio VI).
 - **Alternatives considered**: un único permiso para todo (no permitiría cumplir la historia 5); comparar con nombres de rol fijos (acopla la feature a un catálogo que no le pertenece).
+- **Nota de coordinación (no es regla de esta feature)**: la futura feature de catálogo de roles debe garantizar que la definición de administrador y las capacidades necesarias para administrar usuarios sean coherentes, evitando que una empresa conserve administradores activos pero ninguno tenga las capacidades necesarias para gestionar usuarios. FR-036 no cambia.
 
 ## R5. Concurrencia
 

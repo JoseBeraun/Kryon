@@ -35,6 +35,7 @@ volver del detalle o del formulario se conservan (FR-018, FR-022).
 | Criterios activos | Un texto que resume la búsqueda y los filtros aplicados, y un botón "Limpiar búsqueda y filtros" (FR-017). |
 | Tabla | Un `<table>` con `<caption>` y las columnas Nombre, Identificador de acceso, Rol, Estado y Acciones. El estado se muestra como texto ("Activo" / "Inactivo"; FR-010). Un rol nulo se muestra como "Sin rol asignado" (EC-10). |
 | Cuenta propia | La fila del actor muestra la etiqueta de texto "Tú" junto al nombre (FR-012). |
+| Texto extenso | Un nombre completo o un identificador de acceso largo se ajusta en varias líneas dentro de su celda; no desplaza ni oculta las columnas Rol, Estado y Acciones, y no se trunca sin que el texto completo quede disponible para lectores de pantalla (EC-9). |
 | Acciones por fila | Botones o enlaces que solo aparecen si su valor en `acciones` es verdadero. Sus nombres accesibles son: "Ver detalle de {nombre}", "Editar a {nombre}", "Activar a {nombre}" y "Desactivar a {nombre}" (FR-048). |
 | Nuevo usuario | Un botón "Nuevo usuario", solo si `puedeRegistrar` (FR-020). |
 | Paginación | Un `<nav aria-label="Paginación de usuarios">` con los botones "Página anterior" y "Página siguiente" (deshabilitados en los extremos) y el texto "Página X de Y · N usuarios" (FR-018). |
@@ -85,6 +86,7 @@ marca "Tú" si corresponde. Debajo aparecen las mismas acciones que en el listad
 | `limite-usuarios-alcanzado` | "No se registró el usuario: la empresa alcanzó su límite de usuarios." (solo si existe un límite externo aplicable; DEP-5) |
 | `rol-no-valido` | Se muestra junto al campo: "Selecciona un rol de la lista." |
 | Sin respuesta o error de red | "No se pudo confirmar el resultado. Revisa el listado y vuelve a intentarlo." (y no se muestra un estado no confirmado; FR-042, EC-8) |
+| `error-interno` | "No se pudo completar la acción por un error interno. Vuelve a intentarlo." (no muestra ningún detalle técnico ni un estado no confirmado; FR-040, FR-041, FR-042) |
 
 Presentación: los mensajes de éxito se anuncian con `aria-live="polite"` y los de error con
 `role="alert"`. Siempre incluyen texto y, si llevan icono, este no es la única señal (FR-050).
