@@ -98,6 +98,11 @@ specs/001-gestion-usuarios/
 
 ```text
 Kryon.sln
+.config/
+└── dotnet-tools.json             # Herramientas locales versionadas: dotnet-ef (misma versión que EF Core)
+scripts/
+└── generar-migracion.ps1          # Generador del SQL idempotente (artifacts/sql/, no versionado); no aplica ni arranca nada
+
 src/
 ├── Kryon.Api/                     # ASP.NET Core Web API (única autoridad de permisos y empresa)
 │   ├── Usuarios/                  # Endpoints de esta feature, mapeo de errores de dominio a ProblemDetails, registro UsuarioNoAccesible
@@ -105,10 +110,10 @@ src/
 │   └── Errores/                   # Manejador global de excepciones inesperadas (500 error-interno)
 ├── Kryon.Core/                    # Dominio + casos de uso (sin dependencias de infraestructura ni de la API)
 │   ├── Seguridad/                 # Interfaz IContextoSolicitud (usuario, empresa, capacidades)
-│   └── Usuarios/                  # Usuario, reglas (último admin, autogestión), casos de uso, opciones, puntos de integración DEP-* (Integraciones/), eventos (Eventos/)
+│   └── Usuarios/                  # Usuario, reglas (último admin, autogestión), casos de uso, opciones, interfaces de persistencia que consumen los casos de uso (IConsultaUsuarios, IRepositorioUsuarios, IBloqueoAdministradoresEmpresa, IRegistroAuditoria, IUnidadDeTrabajo), puntos de integración DEP-* (Integraciones/), eventos (Eventos/)
 ├── Kryon.Infrastructure/          # EF Core, SQL Server, RLS, auditoría, bloqueo por empresa
-│   ├── Persistencia/              # KryonDbContext, configuraciones, migraciones, interceptor de SESSION_CONTEXT
-│   └── Usuarios/                  # Consulta y repositorio de usuarios, auditoría, bloqueo; adaptadores de los puntos de integración cuando existan (Integraciones/)
+│   ├── Persistencia/              # KryonDbContext, UnidadDeTrabajo, KryonDbContextFactoriaDiseno (solo tooling de EF), configuraciones, migraciones, interceptor de SESSION_CONTEXT
+│   └── Usuarios/                  # Implementaciones de las interfaces de Core: consulta y repositorio de usuarios, auditoría, bloqueo; adaptadores de los puntos de integración cuando existan (Integraciones/)
 ├── Kryon.Contracts/               # DTOs compartidos entre la API y Blazor (solicitudes, respuestas, códigos de error)
 └── Kryon.Web/                     # Blazor WebAssembly
     ├── Usuarios/                  # Páginas: listado, detalle, formulario; filtros, paginación, diálogo de confirmación; ClienteUsuarios; TextosErrores

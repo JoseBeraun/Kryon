@@ -9,6 +9,7 @@ implementación: los proyectos y rutas son los definidos en [plan.md](plan.md#pr
 
 - .NET 10 SDK. Las pruebas usan xUnit v3 con el runner VSTest, así que se ejecutan con `dotnet test` como se indica abajo.
 - Docker, para el SQL Server de Testcontainers y para ejecutar la API en local.
+- **PowerShell 7 (`pwsh`)**, el requisito soportado para ejecutar los scripts PowerShell del proyecto (`scripts/generar-migracion.ps1`) y el instalador de navegadores de Playwright. Windows PowerShell 5.1 no se considera equivalente. Si la ejecución de scripts está restringida por una política del equipo o del sistema, se resuelve según la política autorizada de ese entorno.
 - Los navegadores de Playwright, instalados después de compilar con `pwsh tests/Kryon.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install`.
 - Datos semilla de prueba (se cargan automáticamente en las pruebas de integración):
   - **Empresa A**: `ana` (administradora, rol con todas las capacidades de gestión de usuarios; nombres de permiso provisionales, research §R4), `beto` (administrador), `carla` (sin permisos de gestión) y `dario` (Inactivo).
@@ -18,13 +19,20 @@ implementación: los proyectos y rutas son los definidos en [plan.md](plan.md#pr
 
 ## Ejecutar
 
+Flujo reproducible en un clon nuevo. `dotnet-ef` es una herramienta local del repositorio: no hace falta ninguna instalación global.
+
 ```powershell
+dotnet tool restore                        # herramientas locales (.config/dotnet-tools.json), incluido dotnet-ef
+dotnet restore Kryon.sln
 dotnet build Kryon.sln
+pwsh scripts/generar-migracion.ps1          # genera artifacts/sql/kryon-migraciones-idempotente.sql (necesario antes del E2E)
 dotnet test tests/Kryon.Core.Tests
 dotnet test tests/Kryon.Api.Tests          # requiere Docker
 dotnet test tests/Kryon.Web.Tests
-dotnet test tests/Kryon.E2E.Tests          # levanta API + Web en local
+dotnet test tests/Kryon.E2E.Tests          # levanta API + Web en local; requiere Docker y el SQL generado
 ```
+
+Antes de ejecutar el E2E debe existir el SQL idempotente generado por `scripts/generar-migracion.ps1`: el E2E lo aplica a su propio contenedor y no genera ni aplica migraciones por su cuenta. La API nunca aplica migraciones al arrancar (research §R12).
 
 Para explorar a mano: `dotnet run --project src/Kryon.Api` y `dotnet run --project src/Kryon.Web`,
 y entrar como `ana` (empresa A) con `IdentidadPrueba`: los encabezados `X-Kryon-Prueba-UsuarioId`,
