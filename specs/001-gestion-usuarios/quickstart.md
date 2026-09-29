@@ -7,7 +7,7 @@ implementación: los proyectos y rutas son los definidos en [plan.md](plan.md#pr
 
 ## Prerrequisitos
 
-- .NET 10 SDK.
+- .NET 10 SDK. Las pruebas usan xUnit v3 con el runner VSTest, así que se ejecutan con `dotnet test` como se indica abajo.
 - Docker, para el SQL Server de Testcontainers y para ejecutar la API en local.
 - Los navegadores de Playwright, instalados después de compilar con `pwsh tests/Kryon.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install`.
 - Datos semilla de prueba (se cargan automáticamente en las pruebas de integración):

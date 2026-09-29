@@ -96,12 +96,16 @@ Azure como nube. Este documento resuelve las decisiones técnicas derivadas. No 
 ## R11. Estrategia de pruebas
 
 - **Decision**:
+  - **Framework**: xUnit v3 (`xunit.v3`) sobre .NET 10 en los 4 proyectos de prueba.
+  - **Runner actual**: VSTest (`Microsoft.NET.Test.Sdk` + `xunit.runner.visualstudio`), ejecutado con el flujo habitual de `dotnet test`.
+  - No se usa MSTest. No se usa xUnit v2 salvo una decisión futura explícita.
+  - Microsoft Testing Platform (MTP) queda como posible migración técnica futura, **no** como decisión actual: esta feature no introduce configuración MTP ni `global.json` para pruebas.
   - `Kryon.Core.Tests`: reglas de dominio (autogestión, último administrador, transiciones de estado, validación) y casos de uso con repositorios en memoria.
-  - `Kryon.Api.Tests`: `WebApplicationFactory` + Testcontainers con SQL Server real (para que RLS, `rowversion` y `sp_getapplock` se prueben de verdad), el handler de autenticación de prueba y datos semilla de las empresas A y B. Incluye pruebas de casos denegados para cada endpoint y pruebas de concurrencia con solicitudes en paralelo.
+  - `Kryon.Api.Tests`: `WebApplicationFactory` + Testcontainers con SQL Server real (para que RLS, `rowversion` y `sp_getapplock` se prueben de verdad), el esquema `IdentidadPrueba` (solo en los entornos Development y Test) y datos semilla de las empresas A y B. Incluye pruebas de casos denegados para cada endpoint y pruebas de concurrencia con solicitudes en paralelo.
   - `Kryon.Web.Tests`: bUnit.
   - `Kryon.E2E.Tests`: Playwright + axe.
 - **Rationale**: cumple el Principio IV (casos permitidos y denegados) y la puerta de calidad del aislamiento A/B. SQLite o el proveedor en memoria no soportan RLS ni `sp_getapplock`, por eso la integración usa SQL Server real.
-- **Alternatives considered**: el proveedor InMemory de EF Core (no reproduce ni las restricciones ni la concurrencia).
+- **Alternatives considered**: el proveedor InMemory de EF Core (no reproduce ni las restricciones ni la concurrencia); MSTest (no es el estándar de pruebas de Kryon); xUnit v2 (sustituido por v3, la línea mantenida de xUnit); NUnit (sin ventaja frente a xUnit para este stack); ejecutar xUnit v3 sobre MTP nativo (aplazado: cambiaría la sintaxis de `dotnet test` y requiere `global.json`; se evaluará como migración futura explícita).
 
 ## R12. Despliegue en Azure
 

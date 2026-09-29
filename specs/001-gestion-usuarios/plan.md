@@ -30,7 +30,7 @@ esas specs (ver [research.md](research.md) §R8 y la sección *Dependencias exte
 
 **Storage**: Microsoft SQL Server (Azure SQL Database en la nube; SQL Server en contenedor para desarrollo y pruebas)
 
-**Testing**: xUnit; `WebApplicationFactory` + Testcontainers (SQL Server) para integración de la API; bUnit para componentes Blazor; Playwright para .NET + Deque axe-core para flujos end-to-end y accesibilidad
+**Testing**: xUnit v3 (.NET 10, runner VSTest; sin MSTest); `WebApplicationFactory` + Testcontainers (SQL Server) para integración de la API; bUnit para componentes Blazor; Playwright para .NET + Deque axe-core para flujos end-to-end y accesibilidad
 
 **Target Platform**: API en Azure App Service (Linux); interfaz Blazor WebAssembly en Azure Static Web Apps; Azure SQL Database; Azure Key Vault para secretos
 
