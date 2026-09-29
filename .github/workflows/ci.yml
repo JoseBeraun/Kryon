@@ -1,0 +1,47 @@
+# CI de Kryon.
+# Proveedor CI provisional: GitHub Actions por estar el repositorio en GitHub.
+# Debe confirmarse con el estándar del equipo antes de considerarlo una decisión transversal de Kryon.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    # Runner Linux con Docker disponible (lo necesitan las pruebas con Testcontainers).
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Kryon.sln
+
+      - name: Build
+        run: dotnet build Kryon.sln --no-restore
+
+      - name: Verify format
+        run: dotnet format Kryon.sln --verify-no-changes --no-restore
+
+      # xUnit v3 (xunit.v3.mtp-off) con el runner VSTest; sin configuración MTP.
+      - name: Test Kryon.Core.Tests
+        run: dotnet test tests/Kryon.Core.Tests/Kryon.Core.Tests.csproj --no-build
+
+      - name: Test Kryon.Api.Tests
+        run: dotnet test tests/Kryon.Api.Tests/Kryon.Api.Tests.csproj --no-build
+
+      - name: Test Kryon.Web.Tests
+        run: dotnet test tests/Kryon.Web.Tests/Kryon.Web.Tests.csproj --no-build
+
+      - name: Test Kryon.E2E.Tests
+        run: dotnet test tests/Kryon.E2E.Tests/Kryon.E2E.Tests.csproj --no-build
