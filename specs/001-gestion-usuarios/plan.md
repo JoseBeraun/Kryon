@@ -142,6 +142,7 @@ de la feature que depende de ella. No se inventa ningún comportamiento sustitut
 **Consecuencia para la entrega**:
 - **Se entregan sin depender de DEP-2 a DEP-5**: las historias 1, 2, 3, 5 y 6, y la edición de nombre completo y rol de la historia 4.
 - **Dependen de la futura spec de autenticación y de la decisión comercial**: el registro de usuarios (FR-020, FR-027, FR-028) y la edición del identificador (DEP-4). Se diseñan y sus contratos quedan fijados, pero su implementación final y su entrega esperan a que DEP-2, DEP-3, DEP-4 y DEP-5 estén definidas. `/speckit-tasks` debe marcar esas tareas como bloqueadas por esas dependencias.
+- **Mecanismo de entrega (feature / release gating, no regla de negocio)**: mientras esas dependencias estén pendientes, `POST /api/usuarios`, el botón "Nuevo usuario" y `acciones.editarIdentificador` quedan detrás de los gates `RegistroUsuarios` y `EdicionIdentificador` (definidos en [tasks.md](tasks.md)). Un gate cerrado significa que la función aún no forma parte del producto desplegado, no que el negocio la prohíba.
 
 ## Complexity Tracking
 

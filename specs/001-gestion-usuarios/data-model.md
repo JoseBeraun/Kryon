@@ -81,14 +81,16 @@ Estados adicionales (p. ej. "Pendiente"): los decidirá DEP-2. El enum se amplí
 | `EmpresaId` | uniqueidentifier | La empresa del **actor**. |
 | `ActorUsuarioId` | uniqueidentifier | Quién realizó la acción. |
 | `OcurridoEn` | datetimeoffset | UTC, asignado por el servidor. |
-| `TipoOperacion` | tinyint (enum) | `Alta`, `Modificacion`, `Activacion`, `Desactivacion`, `AccesoDenegadoOtraEmpresa`. |
-| `UsuarioAfectadoId` | uniqueidentifier | El usuario de la empresa sobre el que se actuó. En `AccesoDenegadoOtraEmpresa` es el identificador **solicitado**, sin ningún dato del recurso. |
+| `TipoOperacion` | tinyint (enum) | `Alta`, `Modificacion`, `Activacion`, `Desactivacion`, `UsuarioNoAccesible`. |
+| `UsuarioAfectadoId` | uniqueidentifier | El usuario de la empresa sobre el que se actuó. En `UsuarioNoAccesible` es el identificador **solicitado**, sin ningún dato del recurso. |
+| `OperacionSolicitada` | tinyint (enum), null | Solo en `UsuarioNoAccesible`: `Consulta`, `Edicion`, `Activacion` o `Desactivacion`. |
 | `CambiosJson` | nvarchar(max), null | Solo en `Modificacion`: `[{"campo":"RolId","anterior":"…","nuevo":"…"}]`, únicamente con los campos que cambiaron (FR-044). |
 
 Reglas:
 - Se inserta en la misma transacción que la operación. Una operación rechazada o cancelada no genera un registro de ese tipo (FR-032, EC-2, EC-3).
 - El rol de base de datos de la aplicación solo tiene `INSERT` y `SELECT` sobre esta tabla (FR-045, research §R7).
 - Nunca contiene credenciales, tokens ni secretos (FR-045).
+- `UsuarioNoAccesible` se registra cuando una operación sobre un `{id}` termina en `usuario-no-encontrado` (FR-046). Con RLS, un usuario de otra empresa y uno inexistente son **indistinguibles**, así que este registro **no** afirma que el recurso pertenezca a otra empresa ni guarda su empresa propietaria. Solo conserva el actor, la empresa actual (la del actor), el id solicitado, la operación solicitada y el momento; el resultado es siempre "no accesible".
 
 ## Valores calculados (no persistidos)
 
