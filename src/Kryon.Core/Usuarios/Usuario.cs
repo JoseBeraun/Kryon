@@ -58,6 +58,16 @@ public sealed class Usuario
         ModificadoEn = ahora;
     }
 
+    /// <summary>
+    /// Solo para que la persistencia reconstruya usuarios ya guardados; los usuarios nuevos se crean con el
+    /// constructor público.
+    /// </summary>
+    private Usuario()
+    {
+        NombreCompleto = string.Empty;
+        IdentificadorAcceso = string.Empty;
+    }
+
     /// <summary>Lo genera el servidor.</summary>
     public Guid Id { get; private set; }
 
