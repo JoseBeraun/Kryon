@@ -23,6 +23,13 @@ public sealed class RolReferencia
         Capacidades = capacidades.ToArray().AsReadOnly();
     }
 
+    /// <summary>Solo para que la persistencia reconstruya roles guardados.</summary>
+    private RolReferencia()
+    {
+        Nombre = string.Empty;
+        Capacidades = Array.Empty<string>();
+    }
+
     public Guid Id { get; }
 
     public Guid EmpresaId { get; }
