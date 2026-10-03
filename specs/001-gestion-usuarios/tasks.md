@@ -97,7 +97,7 @@ fija ninguna regla sustituta.
 - [X] T025 Crear la migración `SeguridadFilas` en `src/Kryon.Infrastructure/Persistencia/Migraciones/` con la herramienta local y el mismo comando de T024 (`dotnet ef migrations add SeguridadFilas …`), sin `dotnet-ef` global, con SQL explícito: una función de predicado y una `SECURITY POLICY` de RLS con predicados de **filtro** y de **bloqueo** sobre `Usuarios` y `AuditoriaUsuarios` basados en `SESSION_CONTEXT('EmpresaId')` (research §R3).
 - [X] T026 Crear la migración `PermisosAuditoria` en `src/Kryon.Infrastructure/Persistencia/Migraciones/` con la herramienta local y el mismo comando de T024, sin `dotnet-ef` global, con SQL explícito: un rol de base de datos de la aplicación con `INSERT` y `SELECT` sobre `AuditoriaUsuarios` y **`DENY UPDATE, DELETE`** sobre ella (FR-045, research §R7). Al terminar, verificar que `scripts/generar-migracion.ps1` genera sin errores un script idempotente que incluye `Inicial`, `SeguridadFilas` y `PermisosAuditoria`.
 - [X] T027 Implementar `RegistroAuditoria` (implementa `IRegistroAuditoria` de T016) en `src/Kryon.Infrastructure/Usuarios/RegistroAuditoria.cs`: añade el registro de auditoría en la **misma transacción** que la operación. `CambiosJson` sigue el formato `[{"campo":…,"anterior":…,"nuevo":…}]` solo con los campos que cambiaron y solo en `Modificacion` (FR-043, FR-044). Nunca incluye credenciales ni tokens.
-- [ ] T028 Registrar Core, Infrastructure, seguridad, opciones e interceptor en `src/Kryon.Api/Program.cs`, con la cadena de conexión desde configuración (User Secrets en desarrollo, Key Vault en Azure) registrando en DI las implementaciones de Infrastructure de las interfaces de Core de T016 (`ConsultaUsuarios`, `RepositorioUsuarios`, `BloqueoAdministradoresEmpresa`, `RegistroAuditoria` y `UnidadDeTrabajo`), y **sin** registrar implementaciones de los puntos de integración DEP-2, DEP-3, DEP-4 y DEP-5.
+- [X] T028 Registrar Core, Infrastructure, seguridad, opciones e interceptor en `src/Kryon.Api/Program.cs`, con la cadena de conexión desde configuración (User Secrets en desarrollo, Key Vault en Azure): `IContextoSolicitud` (desde los claims verificados, T007), `ContextoEmpresaInterceptor` y `KryonDbContext` por solicitud, las implementaciones de Infrastructure de las interfaces de Core de T016 que ya existen en esta fase (`UnidadDeTrabajo` y `RegistroAuditoria`), `OpcionesUsuarios` (T018), las políticas de autorización (T008), `IdentidadPrueba` **solo** en Development y Test (T009) y el CORS de T010. **Sin** registrar implementaciones de los puntos de integración DEP-2, DEP-3, DEP-4 y DEP-5, y sin aplicar migraciones al arrancar (research §R12). Las implementaciones de Infrastructure que aún no existen se registran en la tarea que las crea: `ConsultaUsuarios` en T048, `BloqueoAdministradoresEmpresa` en T063 y `RepositorioUsuarios` en T064.
 
 ### Errores de la API
 
@@ -142,7 +142,7 @@ fija ninguna regla sustituta.
 
 ### Implementation for User Story 1
 
-- [ ] T048 [US1] Implementar `ConsultaUsuarios` (implementa `IConsultaUsuarios` de T016 y devuelve tipos de Core) en `src/Kryon.Infrastructure/Usuarios/ConsultaUsuarios.cs`: búsqueda parcial parametrizada con `LIKE`, escapando `%`, `_` y `[` sobre `NombreCompleto` e `IdentificadorAcceso`; filtros `rolId` y `estado` con AND; orden `NombreCompleto`, luego `Id`; `Skip`/`Take` con el tamaño leído de `OpcionesUsuarios` (valor por defecto y máximo provisionales); `total` de la misma consulta filtrada (FR-014 a FR-018). Nunca usa `IgnoreQueryFilters()`.
+- [ ] T048 [US1] Implementar `ConsultaUsuarios` (implementa `IConsultaUsuarios` de T016 y devuelve tipos de Core) en `src/Kryon.Infrastructure/Usuarios/ConsultaUsuarios.cs`: búsqueda parcial parametrizada con `LIKE`, escapando `%`, `_` y `[` sobre `NombreCompleto` e `IdentificadorAcceso`; filtros `rolId` y `estado` con AND; orden `NombreCompleto`, luego `Id`; `Skip`/`Take` con el tamaño leído de `OpcionesUsuarios` (valor por defecto y máximo provisionales); `total` de la misma consulta filtrada (FR-014 a FR-018). Nunca usa `IgnoreQueryFilters()`. Registrar `IConsultaUsuarios` → `ConsultaUsuarios` en `src/Kryon.Api/Program.cs` con ciclo de vida por solicitud (depende de `KryonDbContext`).
 - [ ] T049 [US1] Implementar el caso de uso `ListarUsuarios` en `src/Kryon.Core/Usuarios/ListarUsuarios.cs`: combina `IConsultaUsuarios` (T016) con `CalculadoraAcciones` y devuelve un resultado de aplicación definido en `Kryon.Core` (usuarios con sus acciones calculadas y `esCuentaPropia`, total, página y tamaño de página, y `puedeRegistrar` = capacidad de registrar **y** gate `RegistroUsuarios` abierto; el estado del gate lo recibe como dato de entrada; ver *Feature / release gating*). No depende de `Kryon.Infrastructure` ni usa `PaginaUsuarios` u otros DTOs de `Kryon.Contracts` (Core no referencia ninguno de los dos).
 - [ ] T050 [US1] Crear `UsuariosEndpoints` con `GET /api/usuarios` (política `Usuarios.Acceder`) y `GET /api/usuarios/roles-asignables` (política `Usuarios.Acceder`) en `src/Kryon.Api/Usuarios/UsuariosEndpoints.cs`, y mapearlos en `src/Kryon.Api/Program.cs`. `GET /api/usuarios` consume el resultado de Core de T049 (pasándole el estado del gate `RegistroUsuarios`) y lo mapea a `PaginaUsuarios` de `Kryon.Contracts` con la forma exacta del contrato OpenAPI, incluido `puedeRegistrar`.
 - [ ] T051 [US1] Crear la página `src/Kryon.Web/Usuarios/ListadoUsuarios.razor` (ruta `/usuarios`) según `contracts/ui-usuarios.md` → *Listado*: `<h1>` "Usuarios", tabla, región viva y carga con `ClienteUsuarios`. La búsqueda, los filtros y la página se leen y escriben en la query string. Estilos del listado en `src/Kryon.Web/Usuarios/ListadoUsuarios.razor.css`: el nombre completo y el identificador de acceso largos se ajustan en varias líneas (`overflow-wrap: anywhere`) sin truncar, para que las columnas Rol, Estado y Acciones sigan visibles (EC-9).
@@ -173,8 +173,8 @@ fija ninguna regla sustituta.
 
 - [ ] T061 [US2] Añadir los métodos `Desactivar(actorId)` y `Activar()` a `src/Kryon.Core/Usuarios/Usuario.cs`, con las precondiciones de data-model.md (*Transiciones de estado*) que no dependen de la base de datos: no ser el actor, estar en el estado de origen correcto.
 - [ ] T062 [P] [US2] Implementar `ReglaUltimoAdministrador` en `src/Kryon.Core/Usuarios/ReglaUltimoAdministrador.cs`: un administrador activo es un usuario Activo cuyo rol incluye la capacidad de acceso a la gestión (nombre provisional `usuarios.administrar`). Rechaza cualquier cambio que deje cero (FR-036).
-- [ ] T063 [P] [US2] Implementar `BloqueoAdministradoresEmpresa` (implementa `IBloqueoAdministradoresEmpresa` de T016) en `src/Kryon.Infrastructure/Usuarios/BloqueoAdministradoresEmpresa.cs`: `sp_getapplock` exclusivo de transacción con el recurso `usuarios-admin:{EmpresaId}` (research §R5).
-- [ ] T064 [US2] Implementar `RepositorioUsuarios` (implementa `IRepositorioUsuarios` de T016; obtener por id dentro de la empresa, contar administradores activos y guardar con `Version` como token de concurrencia, traduciendo `DbUpdateConcurrencyException` a `usuario-modificado`) en `src/Kryon.Infrastructure/Usuarios/RepositorioUsuarios.cs`.
+- [ ] T063 [US2] Implementar `BloqueoAdministradoresEmpresa` (implementa `IBloqueoAdministradoresEmpresa` de T016) en `src/Kryon.Infrastructure/Usuarios/BloqueoAdministradoresEmpresa.cs`: `sp_getapplock` exclusivo de transacción con el recurso `usuarios-admin:{EmpresaId}` (research §R5). Registrar `IBloqueoAdministradoresEmpresa` → `BloqueoAdministradoresEmpresa` en `src/Kryon.Api/Program.cs` con ciclo de vida por solicitud (depende de `KryonDbContext`).
+- [ ] T064 [US2] Implementar `RepositorioUsuarios` (implementa `IRepositorioUsuarios` de T016; obtener por id dentro de la empresa, contar administradores activos y guardar con `Version` como token de concurrencia, traduciendo `DbUpdateConcurrencyException` a `usuario-modificado`) en `src/Kryon.Infrastructure/Usuarios/RepositorioUsuarios.cs`. Registrar `IRepositorioUsuarios` → `RepositorioUsuarios` en `src/Kryon.Api/Program.cs` con ciclo de vida por solicitud (depende de `KryonDbContext`).
 - [ ] T065 [US2] Implementar el caso de uso `CambiarEstadoUsuario` en `src/Kryon.Core/Usuarios/CambiarEstadoUsuario.cs`. Pasos: transacción → bloqueo por empresa (solo al desactivar) → cargar → verificar la versión → aplicar la regla → guardar → escribir la auditoría (`Activacion`/`Desactivacion`) → confirmar → publicar `UsuarioDesactivado` (DEP-1; sin suscriptores en esta feature).
 - [ ] T066 [US2] Añadir `POST /api/usuarios/{id}/desactivacion` (política `Usuarios.Desactivar`) y `POST /api/usuarios/{id}/activacion` (política `Usuarios.Activar`), con `If-Match` obligatorio y `ETag` en la respuesta, en `src/Kryon.Api/Usuarios/UsuariosEndpoints.cs`.
 - [ ] T067 [P] [US2] Crear el diálogo `src/Kryon.Web/Usuarios/ConfirmarDesactivacion.razor` según `contracts/ui-usuarios.md` → *Diálogo de confirmación*: `<dialog>` modal, título y texto exactos, botones "Desactivar" y "Cancelar", foco inicial en Cancelar, Escape cancela y el foco vuelve al origen.
@@ -345,14 +345,14 @@ indican cuándo se abre un gate, no una dependencia de implementación.
 
 - Las pruebas se escriben primero y deben fallar.
 - Dominio → casos de uso → infraestructura → endpoints → interfaz.
-- Las tareas sobre el mismo archivo (`UsuariosEndpoints.cs`, `ListadoUsuarios.razor`, `Usuario.cs`) son secuenciales entre sí.
+- Las tareas sobre el mismo archivo (`UsuariosEndpoints.cs`, `ListadoUsuarios.razor`, `Usuario.cs`, `Program.cs`) son secuenciales entre sí.
 
 ### Parallel Opportunities
 
 - Setup: T003, T004 y T005.
 - Foundational: T009 a T017 y T021 (archivos distintos) y, una vez hecho T032, T034 a T037; también T039 a T042.
 - En cada historia, todas las pruebas marcadas [P] se pueden hacer a la vez.
-- Con Foundational terminado, la API de US1 (T048 a T050) y las reglas de US2 (T061 a T063) pueden avanzar en paralelo.
+- Con Foundational terminado, la API de US1 (T048 a T050) y las reglas de US2 (T061 a T063) pueden avanzar en paralelo en lo que toca archivos distintos; los registros en `src/Kryon.Api/Program.cs` (T048, T050, T063 y T064) se integran de forma secuencial.
 
 ---
 
@@ -369,7 +369,6 @@ Task: "T060 Pruebas bUnit de fallo de comunicación en tests/Kryon.Web.Tests/Usu
 
 # Piezas independientes de US2 a la vez:
 Task: "T062 ReglaUltimoAdministrador en src/Kryon.Core/Usuarios/ReglaUltimoAdministrador.cs"
-Task: "T063 BloqueoAdministradoresEmpresa en src/Kryon.Infrastructure/Usuarios/BloqueoAdministradoresEmpresa.cs"
 Task: "T067 Diálogo en src/Kryon.Web/Usuarios/ConfirmarDesactivacion.razor"
 ```
 
