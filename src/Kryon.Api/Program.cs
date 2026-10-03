@@ -1,3 +1,4 @@
+using Kryon.Api.Errores;
 using Kryon.Api.Seguridad;
 using Kryon.Core.Seguridad;
 using Kryon.Core.Usuarios;
@@ -71,6 +72,11 @@ builder.Services.AddDbContext<KryonDbContext>((proveedor, opciones) =>
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IRegistroAuditoria, RegistroAuditoria>();
 
+// Excepciones no controladas: 500 genérico del contrato en todos los entornos (FR-041, SC-004).
+// UseExceptionHandler() sin parámetros exige un IProblemDetailsService; el manejador responde antes que él.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ManejadorExcepcionesInesperadas>();
+
 // CORS solo para Development y Test: permite que Kryon.Web local envíe los encabezados de IdentidadPrueba.
 // Fuera de esos entornos la política no existe.
 if (entornoDePruebas)
@@ -104,6 +110,12 @@ if (string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString(NombreCadena
         $"Falta la cadena de conexión 'ConnectionStrings:{NombreCadenaConexion}'. "
         + "En Development se configura con User Secrets; en Azure, desde Key Vault.");
 }
+
+// Primero en el pipeline para capturar las excepciones de todo lo que viene después.
+app.UseExceptionHandler();
+
+// Justo dentro: atiende solo las excepciones con la respuesta ya iniciada, que UseExceptionHandler no puede manejar.
+app.UseMiddleware<BarreraRespuestaIniciada>();
 
 app.UseHttpsRedirection();
 
