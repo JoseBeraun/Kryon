@@ -3,8 +3,11 @@
 **Feature**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md) | **Research**: [research.md](research.md)
 
 Convenciones: SQL Server, identificadores `uniqueidentifier`, fechas `datetimeoffset` en UTC y
-texto `nvarchar` con intercalación `_CI_AI` en los campos de búsqueda. Toda tabla de empresa
-tiene `EmpresaId` y está cubierta por el filtro global de EF Core y por RLS (research §R3).
+texto `nvarchar` con intercalación `_CI_AI` en los campos de búsqueda. Toda entidad de empresa
+de esta feature tiene `EmpresaId`. `Usuario`, `RolReferencia` y `AuditoriaUsuario` están protegidas
+por el filtro global de EF Core. La segunda capa, RLS (research §R3), protege `Usuarios` y
+`AuditoriaUsuarios`; `RolReferencia` es de solo lectura en esta feature, no forma parte de esa
+política de seguridad y queda aislada por el filtro global de EF Core.
 
 Las longitudes máximas de texto son **decisiones técnicas provisionales y configurables**
 (plan, *Technical Context*), no requisitos de negocio: la spec no las fija.
