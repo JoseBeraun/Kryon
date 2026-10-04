@@ -42,6 +42,9 @@ public sealed class KryonApiFactory : WebApplicationFactory<Program>, IAsyncLife
 
         await using var contexto = new KryonDbContext(opciones, new ContextoMigracion());
         await contexto.Database.MigrateAsync();
+
+        // quickstart.md: los datos semilla se cargan automáticamente en las pruebas de integración.
+        await SemillaDatos.SembrarAsync(CadenaConexion);
     }
 
     public override async ValueTask DisposeAsync()
