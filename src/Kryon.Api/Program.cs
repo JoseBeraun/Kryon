@@ -41,7 +41,9 @@ if (entornoDePruebas)
 }
 else
 {
-    builder.Services.AddAuthentication();
+    // Sin autenticación real todavía: un esquema que no autentica a nadie, para responder 401 en vez de fallar.
+    builder.Services.AddAuthentication(SinAutenticacion.Esquema)
+        .AddScheme<AuthenticationSchemeOptions, ManejadorSinAutenticacion>(SinAutenticacion.Esquema, configureOptions: null);
 }
 
 builder.Services.AgregarPoliticasUsuarios();
