@@ -1,0 +1,31 @@
+@*
+    Mensajes de la interfaz (FR-050). Las dos regiones están siempre en el DOM, aunque estén vacías, para que las
+    tecnologías de apoyo anuncien el texto cuando aparece:
+    - aria-live="polite": éxito y resultados.
+    - role="alert": errores.
+    Solo muestra el texto que recibe; los textos los decide quien lo usa. El significado está siempre en el texto, nunca
+    solo en un color o un icono.
+*@
+
+<div aria-live="polite">
+    @if (!string.IsNullOrWhiteSpace(Exito))
+    {
+        <p>@Exito</p>
+    }
+</div>
+<div role="alert">
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <p>@Error</p>
+    }
+</div>
+
+@code {
+    /// <summary>Texto de éxito o de resultados. Si es null o vacío, la región queda vacía.</summary>
+    [Parameter]
+    public string? Exito { get; set; }
+
+    /// <summary>Texto de error. Si es null o vacío, la región queda vacía.</summary>
+    [Parameter]
+    public string? Error { get; set; }
+}
