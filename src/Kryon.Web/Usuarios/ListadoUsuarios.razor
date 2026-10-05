@@ -1,0 +1,167 @@
+@page "/usuarios"
+@using Kryon.Contracts.Usuarios
+@using Kryon.Web.Compartido
+@implements IDisposable
+@inject ClienteUsuarios Cliente
+@inject NavigationManager Navegacion
+
+@*
+    Listado de usuarios (contracts/ui-usuarios.md → Listado). La búsqueda, los filtros y la página se leen de la query
+    string y se escriben en ella (FR-018, FR-022). La interfaz no decide permisos: las acciones de cada fila y
+    "Nuevo usuario" salen solo de `acciones` y `puedeRegistrar` de la API (FR-007).
+*@
+
+<PageTitle>Usuarios</PageTitle>
+
+<h1>Usuarios</h1>
+
+<Mensajes Exito="@anuncio" />
+
+@if (resultado is not null)
+{
+    @if (resultado.PuedeRegistrar)
+    {
+        <button type="button" @onclick="IrANuevoUsuario">Nuevo usuario</button>
+    }
+
+    <table class="listado-usuarios">
+        <caption>Usuarios de la empresa</caption>
+        <thead>
+            <tr>
+                <th scope="col">Nombre</th>
+                <th scope="col">Identificador de acceso</th>
+                <th scope="col">Rol</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var usuario in resultado.Elementos)
+            {
+                <tr @key="usuario.Id">
+                    <td class="texto-extenso">
+                        @usuario.NombreCompleto
+                        @if (usuario.EsCuentaPropia)
+                        {
+                            <span class="cuenta-propia">Tú</span>
+                        }
+                    </td>
+                    <td class="texto-extenso">@usuario.IdentificadorAcceso</td>
+                    <td>@(usuario.Rol?.Nombre ?? "Sin rol asignado")</td>
+                    <td>@TextoEstado(usuario.Estado)</td>
+                    <td>
+                        @if (usuario.Acciones.VerDetalle)
+                        {
+                            <a href="@($"usuarios/{usuario.Id}")" aria-label="@($"Ver detalle de {usuario.NombreCompleto}")">Ver detalle</a>
+                        }
+                        @if (usuario.Acciones.Editar)
+                        {
+                            <a href="@($"usuarios/{usuario.Id}/editar")" aria-label="@($"Editar a {usuario.NombreCompleto}")">Editar</a>
+                        }
+                        @* Activar y desactivar se conectan con la API en US2 (T057 y siguientes). *@
+                        @if (usuario.Acciones.Activar)
+                        {
+                            <button type="button" aria-label="@($"Activar a {usuario.NombreCompleto}")">Activar</button>
+                        }
+                        @if (usuario.Acciones.Desactivar)
+                        {
+                            <button type="button" aria-label="@($"Desactivar a {usuario.NombreCompleto}")">Desactivar</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    /// <summary>Búsqueda parcial (parámetro <c>busqueda</c> del contrato).</summary>
+    [SupplyParameterFromQuery(Name = "busqueda")]
+    public string? Busqueda { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rolId")]
+    public string? RolId { get; set; }
+
+    /// <summary><c>activo</c> o <c>inactivo</c>; la API rechaza cualquier otro valor.</summary>
+    [SupplyParameterFromQuery(Name = "estado")]
+    public string? Estado { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pagina")]
+    public string? Pagina { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tamanoPagina")]
+    public string? TamanoPagina { get; set; }
+
+    private PaginaUsuarios? resultado;
+    private string? anuncio;
+    private string? criteriosCargados;
+    private CancellationTokenSource? carga;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo se vuelve a cargar si cambió la query string, no en cada renderizado del padre.
+        var criterios = $"{Busqueda}|{RolId}|{Estado}|{Pagina}|{TamanoPagina}";
+        if (criterios == criteriosCargados)
+        {
+            return;
+        }
+
+        var esCambio = criteriosCargados is not null;
+        criteriosCargados = criterios;
+
+        carga?.Cancel();
+        carga?.Dispose();
+        carga = new CancellationTokenSource();
+        var cancelacion = carga.Token;
+
+        try
+        {
+            var respuesta = await Cliente.ListarUsuariosAsync(
+                string.IsNullOrEmpty(Busqueda) ? null : Busqueda,
+                Guid.TryParse(RolId, out var rol) ? rol : null,
+                string.IsNullOrEmpty(Estado) ? null : Estado,
+                int.TryParse(Pagina, out var numero) ? numero : null,
+                int.TryParse(TamanoPagina, out var tamano) ? tamano : null,
+                cancelacion);
+
+            // Los estados de error, vacío y sin resultados los completa T054.
+            resultado = respuesta.EsCorrecta ? respuesta.Valor : null;
+
+            // El anuncio se hace cuando cambian la búsqueda, los filtros o la página (FR-019).
+            anuncio = esCambio && resultado is not null ? $"{resultado.Total} usuarios encontrados" : anuncio;
+        }
+        catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
+        {
+            // Una carga más reciente sustituyó a esta.
+        }
+    }
+
+    /// <summary>
+    /// Escribe la búsqueda, los filtros y la página en la query string; la página se recarga desde ella. Lo usan los
+    /// controles de búsqueda, filtros y paginación del listado.
+    /// </summary>
+    private void AplicarCriterios(string? busqueda, Guid? rolId, string? estado, int pagina) =>
+        Navegacion.NavigateTo(Navegacion.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["busqueda"] = string.IsNullOrEmpty(busqueda) ? null : busqueda,
+            ["rolId"] = rolId,
+            ["estado"] = string.IsNullOrEmpty(estado) ? null : estado,
+            ["pagina"] = pagina > 1 ? pagina : null,
+        }));
+
+    private void IrANuevoUsuario() => Navegacion.NavigateTo("usuarios/nuevo");
+
+    /// <summary>Texto del estado del contrato (FR-010). Un valor que el contrato no define se muestra tal cual.</summary>
+    private static string TextoEstado(string estado) => estado switch
+    {
+        "activo" => "Activo",
+        "inactivo" => "Inactivo",
+        _ => estado,
+    };
+
+    public void Dispose()
+    {
+        carga?.Cancel();
+        carga?.Dispose();
+    }
+}

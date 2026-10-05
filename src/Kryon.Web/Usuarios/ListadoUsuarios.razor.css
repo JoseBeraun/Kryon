@@ -1,0 +1,5 @@
+/* Un nombre completo o un identificador de acceso largo se ajusta en varias líneas dentro de su celda, sin truncarse,
+   para que las columnas Rol, Estado y Acciones sigan visibles (EC-9). */
+.texto-extenso {
+    overflow-wrap: anywhere;
+}
