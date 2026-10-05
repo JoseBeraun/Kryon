@@ -1,11 +1,13 @@
 using Kryon.Api.Errores;
 using Kryon.Api.Seguridad;
+using Kryon.Api.Usuarios;
 using Kryon.Core.Seguridad;
 using Kryon.Core.Usuarios;
 using Kryon.Infrastructure.Persistencia;
 using Kryon.Infrastructure.Usuarios;
 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Net.Http.Headers;
 
@@ -48,6 +50,9 @@ else
 
 builder.Services.AgregarPoliticasUsuarios();
 
+// Las denegaciones de autorización responden con el ProblemDetails del contrato (401 no-autenticado, 403 sin-permiso).
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, RespuestaAutorizacion>();
+
 // Contexto de la solicitud: solo desde los claims verificados. Si no se puede construir, falla cerrado.
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IContextoSolicitud>(proveedor =>
@@ -74,6 +79,9 @@ builder.Services.AddDbContext<KryonDbContext>((proveedor, opciones) =>
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IRegistroAuditoria, RegistroAuditoria>();
 builder.Services.AddScoped<IConsultaUsuarios, ConsultaUsuarios>();
+
+// Casos de uso de Core: por solicitud, como el contexto y la consulta de los que dependen.
+builder.Services.AddScoped<ListarUsuarios>();
 
 // Excepciones no controladas: 500 genérico del contrato en todos los entornos (FR-041, SC-004).
 // UseExceptionHandler() sin parámetros exige un IProblemDetailsService; el manejador responde antes que él.
@@ -129,5 +137,7 @@ if (entornoDePruebas)
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapUsuariosEndpoints();
 
 app.Run();
