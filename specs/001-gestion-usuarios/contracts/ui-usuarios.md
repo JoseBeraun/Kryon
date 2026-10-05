@@ -60,7 +60,7 @@ marca "Tú" si corresponde. Debajo aparecen las mismas acciones que en el listad
 | Rol en la propia cuenta | Es solo lectura, con el texto de ayuda "No puedes cambiar tu propio rol" (FR-035). |
 | Validación | Los errores de `errors` se muestran junto a cada campo, se asocian con `aria-describedby` y el campo recibe `aria-invalid="true"`. Arriba del formulario aparece un resumen con `role="alert"`, con enlaces a cada campo, y el foco se mueve a ese resumen (FR-025). |
 | Botones | "Guardar" y "Cancelar". Cancelar vuelve al listado sin hacer cambios (FR-022). |
-| Conflicto de versión | Ante `usuario-modificado`, muestra "Otra persona modificó este usuario. Revisa los datos actuales y vuelve a aplicar tus cambios.", recarga los datos actuales desde `actual` y no guarda nada (FR-039). |
+| Conflicto de versión | Ante `usuario-modificado`, muestra el mensaje de `usuario-modificado` de la tabla *Mensajes*, recarga los datos actuales desde `actual` y no guarda nada (FR-039). |
 
 ## Diálogo de confirmación de desactivación
 
@@ -76,6 +76,10 @@ marca "Tú" si corresponde. Debajo aparecen las mismas acciones que en el listad
 | Éxito de desactivación | "{nombre} fue desactivado." |
 | Éxito de activación | "{nombre} fue activado." |
 | Éxito de registro / edición | "Usuario {nombre} guardado." |
+| `no-autenticado` | "No se pudo verificar tu sesión. Vuelve a iniciar sesión." |
+| `validacion` | "Revisa los campos indicados y corrige los errores antes de continuar." (mensaje general; los errores de `errors` se siguen mostrando junto a cada campo; ver *Formulario de registro y edición*) |
+| `identificador-no-editable` | "No se cambió el identificador de acceso: este identificador no se puede modificar." (que el identificador sea editable lo decide DEP-4) |
+| `falta-version` | "No se aplicó el cambio porque faltaba la versión del usuario. Recarga los datos y vuelve a intentarlo." |
 | `no-puede-desactivarse-a-si-mismo` | "No se desactivó la cuenta: no puedes desactivar tu propia cuenta. Pide a otro administrador que lo haga." |
 | `no-puede-cambiar-su-propio-rol` | "No se cambió el rol: no puedes cambiar tu propio rol. Pide a otro administrador que lo haga." |
 | `ultimo-administrador` | "No se aplicó el cambio: la empresa debe tener al menos un administrador activo. Asigna el rol de administrador a otra persona primero." |
