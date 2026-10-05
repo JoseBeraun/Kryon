@@ -73,6 +73,7 @@ builder.Services.AddDbContext<KryonDbContext>((proveedor, opciones) =>
 // DEP-2 a DEP-5 no se registran.
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IRegistroAuditoria, RegistroAuditoria>();
+builder.Services.AddScoped<IConsultaUsuarios, ConsultaUsuarios>();
 
 // Excepciones no controladas: 500 genérico del contrato en todos los entornos (FR-041, SC-004).
 // UseExceptionHandler() sin parámetros exige un IProblemDetailsService; el manejador responde antes que él.
