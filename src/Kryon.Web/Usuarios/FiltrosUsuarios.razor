@@ -1,0 +1,130 @@
+@using Kryon.Contracts.Usuarios
+@implements IDisposable
+@inject ClienteUsuarios Cliente
+
+@*
+    Búsqueda y filtros del listado (contracts/ui-usuarios.md → Listado; FR-014, FR-015, FR-017). Solo recoge criterios:
+    la búsqueda y el filtrado los hace la API. Los roles salen de GET /api/usuarios/roles-asignables.
+*@
+
+<form role="search" @onsubmit="BuscarAsync">
+    <label for="busqueda-usuarios">Buscar por nombre o identificador</label>
+    <input id="busqueda-usuarios" type="search" @bind="busqueda" />
+    <button type="submit">Buscar</button>
+</form>
+
+<label for="filtro-rol">Rol</label>
+<select id="filtro-rol" value="@(RolId ?? string.Empty)" @onchange="CambiarRolAsync">
+    <option value="">Todos</option>
+    @foreach (var rol in roles)
+    {
+        <option value="@rol.Id">@rol.Nombre</option>
+    }
+</select>
+
+<label for="filtro-estado">Estado</label>
+<select id="filtro-estado" value="@(Estado ?? string.Empty)" @onchange="CambiarEstadoAsync">
+    <option value="">Todos</option>
+    <option value="activo">Activo</option>
+    <option value="inactivo">Inactivo</option>
+</select>
+
+@if (HayCriterios)
+{
+    <p>@ResumenCriterios()</p>
+    <button type="button" @onclick="LimpiarAsync">Limpiar búsqueda y filtros</button>
+}
+
+@code {
+    /// <summary>Búsqueda aplicada (de la query string).</summary>
+    [Parameter]
+    public string? Busqueda { get; set; }
+
+    /// <summary>Rol aplicado (de la query string).</summary>
+    [Parameter]
+    public string? RolId { get; set; }
+
+    /// <summary>Estado aplicado (de la query string): <c>activo</c> o <c>inactivo</c>.</summary>
+    [Parameter]
+    public string? Estado { get; set; }
+
+    /// <summary>Nuevos criterios elegidos; quien escucha los aplica desde la primera página.</summary>
+    [Parameter]
+    public EventCallback<CriteriosUsuarios> AlCambiar { get; set; }
+
+    private readonly CancellationTokenSource cancelacion = new();
+    private IReadOnlyList<RolResumen> roles = [];
+    private string? busqueda;
+    private string? busquedaAplicada;
+
+    private bool HayCriterios =>
+        !string.IsNullOrEmpty(Busqueda) || !string.IsNullOrEmpty(RolId) || !string.IsNullOrEmpty(Estado);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var respuesta = await Cliente.ListarRolesAsignablesAsync(cancelacion.Token);
+            roles = respuesta.EsCorrecta ? respuesta.Valor! : [];
+        }
+        catch (HttpRequestException)
+        {
+            // Sin roles el filtro solo ofrece "Todos"; el listado informa de sus propios errores.
+            roles = [];
+        }
+        catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
+        {
+            // El componente se descartó antes de recibir los roles.
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Solo cuando cambia la búsqueda aplicada, para no borrar lo que se está escribiendo.
+        if (Busqueda != busquedaAplicada)
+        {
+            busquedaAplicada = Busqueda;
+            busqueda = Busqueda;
+        }
+    }
+
+    private Task BuscarAsync() => AlCambiar.InvokeAsync(new(busqueda, RolId, Estado));
+
+    private Task CambiarRolAsync(ChangeEventArgs e) => AlCambiar.InvokeAsync(new(Busqueda, e.Value as string, Estado));
+
+    private Task CambiarEstadoAsync(ChangeEventArgs e) => AlCambiar.InvokeAsync(new(Busqueda, RolId, e.Value as string));
+
+    private Task LimpiarAsync() => AlCambiar.InvokeAsync(new(null, null, null));
+
+    /// <summary>Resumen en texto de los criterios aplicados (FR-017).</summary>
+    private string ResumenCriterios()
+    {
+        var partes = new List<string>();
+        if (!string.IsNullOrEmpty(Busqueda))
+        {
+            partes.Add($"búsqueda \"{Busqueda}\"");
+        }
+
+        if (!string.IsNullOrEmpty(RolId))
+        {
+            var nombre = roles.FirstOrDefault(r => r.Id.ToString() == RolId)?.Nombre;
+            partes.Add(nombre is null ? "rol seleccionado" : $"rol {nombre}");
+        }
+
+        if (!string.IsNullOrEmpty(Estado))
+        {
+            partes.Add(Estado == "activo" ? "estado Activo" : Estado == "inactivo" ? "estado Inactivo" : $"estado {Estado}");
+        }
+
+        return $"Criterios activos: {string.Join(", ", partes)}.";
+    }
+
+    public void Dispose()
+    {
+        cancelacion.Cancel();
+        cancelacion.Dispose();
+    }
+
+    /// <summary>Criterios de búsqueda y filtros del listado; null o vacío significa "sin criterio".</summary>
+    public sealed record CriteriosUsuarios(string? Busqueda, string? RolId, string? Estado);
+}

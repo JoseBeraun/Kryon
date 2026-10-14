@@ -1,0 +1,39 @@
+@*
+    Paginación del listado (contracts/ui-usuarios.md → Listado; FR-018). Solo presenta los metadatos que devuelve la API
+    (total, página y tamaño de página) y pide otra página; no pagina en el cliente.
+*@
+
+<nav aria-label="Paginación de usuarios">
+    <button type="button" disabled="@EsPrimera" @onclick="AnteriorAsync">Página anterior</button>
+    <span>Página @Pagina de @TotalPaginas · @Total usuarios</span>
+    <button type="button" disabled="@EsUltima" @onclick="SiguienteAsync">Página siguiente</button>
+</nav>
+
+@code {
+    /// <summary>Página devuelta por la API, empezando en 1.</summary>
+    [Parameter]
+    public int Pagina { get; set; }
+
+    /// <summary>Tamaño de página aplicado por la API.</summary>
+    [Parameter]
+    public int TamanoPagina { get; set; }
+
+    /// <summary>Coincidencias totales según la API.</summary>
+    [Parameter]
+    public int Total { get; set; }
+
+    /// <summary>Página que se pide; nunca menor que 1 ni mayor que la última.</summary>
+    [Parameter]
+    public EventCallback<int> AlCambiarPagina { get; set; }
+
+    /// <summary>Número de páginas para presentarlo; al menos 1.</summary>
+    private int TotalPaginas => TamanoPagina > 0 ? Math.Max(1, (int)Math.Ceiling(Total / (double)TamanoPagina)) : 1;
+
+    private bool EsPrimera => Pagina <= 1;
+
+    private bool EsUltima => Pagina >= TotalPaginas;
+
+    private Task AnteriorAsync() => EsPrimera ? Task.CompletedTask : AlCambiarPagina.InvokeAsync(Pagina - 1);
+
+    private Task SiguienteAsync() => EsUltima ? Task.CompletedTask : AlCambiarPagina.InvokeAsync(Pagina + 1);
+}
