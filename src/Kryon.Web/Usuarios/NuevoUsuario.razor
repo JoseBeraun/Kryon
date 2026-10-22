@@ -1,0 +1,157 @@
+@page "/usuarios/nuevo"
+@using Kryon.Contracts.Usuarios
+@using Kryon.Web.Compartido
+@implements IDisposable
+@inject ClienteUsuarios Cliente
+@inject NavigationManager Navegacion
+@inject AvisoNavegacion Aviso
+
+@*
+    Registro de un usuario (contracts/ui-usuarios.md → Formulario de registro y edición; US4, FR-022, FR-024 a FR-028).
+    Reutiliza el formulario de la edición con los tres datos editables. Solo muestra lo que el servidor confirma: las
+    reglas (formato y unicidad del identificador, límite, estado inicial) las aplica la API. Al guardar o al cancelar
+    vuelve al listado con su query string; al guardar, el listado anuncia el éxito.
+*@
+
+<PageTitle>Nuevo usuario</PageTitle>
+
+<Mensajes Error="@error" />
+
+<h1>Nuevo usuario</h1>
+
+@if (cargado)
+{
+    <FormularioUsuario Valores="@valores"
+                       Roles="@roles"
+                       EsCuentaPropia="false"
+                       IdentificadorEditable="true"
+                       Errores="@errores"
+                       Guardando="@guardando"
+                       AlGuardar="GuardarAsync"
+                       AlCancelar="VolverAlListado" />
+}
+else if (error is not null)
+{
+    <a href="@($"usuarios{consultaListado}")">Volver al listado</a>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "busqueda")]
+    public string? Busqueda { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rolId")]
+    public string? RolId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "estado")]
+    public string? Estado { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pagina")]
+    public string? Pagina { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tamanoPagina")]
+    public string? TamanoPagina { get; set; }
+
+    private readonly CancellationTokenSource vida = new();
+
+    // Registrar un usuario requiere sus tres datos: el identificador es editable aquí. DEP-4 solo decide si puede
+    // cambiarse después del registro.
+    private readonly FormularioUsuario.ValoresFormulario valores = new();
+    private IReadOnlyList<RolResumen> roles = [];
+    private IReadOnlyDictionary<string, string[]>? errores;
+    private bool cargado;
+    private bool guardando;
+    private string? error;
+    private string consultaListado = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var respuesta = await Cliente.ListarRolesAsignablesAsync(vida.Token);
+            if (respuesta.EsCorrecta)
+            {
+                roles = respuesta.Valor!;
+                cargado = true;
+            }
+            else
+            {
+                error = TextosErrores.ParaCodigo(respuesta.CodigoError);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = TextosErrores.SinRespuesta;
+        }
+    }
+
+    protected override void OnParametersSet() =>
+        consultaListado = ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina);
+
+    private async Task GuardarAsync(FormularioUsuario.ValoresFormulario enviados)
+    {
+        if (guardando)
+        {
+            return;
+        }
+
+        guardando = true;
+        error = null;
+        errores = null;
+        try
+        {
+            var solicitud = new RegistrarUsuarioSolicitud
+            {
+                NombreCompleto = enviados.NombreCompleto,
+                IdentificadorAcceso = enviados.IdentificadorAcceso,
+
+                // Un rol sin elegir viaja vacío y la API lo rechaza por campo.
+                RolId = Guid.TryParse(enviados.RolId, out var rol) ? rol : Guid.Empty,
+            };
+
+            var respuesta = await Cliente.RegistrarUsuarioAsync(solicitud, vida.Token);
+            if (respuesta.EsCorrecta)
+            {
+                // El listado lo anuncia al mostrarse (contracts/ui-usuarios.md → Mensajes; FR-050).
+                Aviso.Dejar($"Usuario {respuesta.Valor!.NombreCompleto} guardado.");
+                VolverAlListado();
+                return;
+            }
+
+            // Los rechazos de un campo se muestran junto a él (contracts/ui-usuarios.md → Mensajes); el resto, arriba.
+            switch (respuesta.CodigoError)
+            {
+                case CodigosError.Validacion when respuesta.Problema?.Errors is { Count: > 0 } porCampo:
+                    errores = porCampo;
+                    break;
+                case CodigosError.IdentificadorEnUso:
+                    errores = JuntoAlCampo("identificadorAcceso", CodigosError.IdentificadorEnUso);
+                    break;
+                case CodigosError.RolNoValido:
+                    errores = JuntoAlCampo("rolId", CodigosError.RolNoValido);
+                    break;
+                default:
+                    error = TextosErrores.ParaCodigo(respuesta.CodigoError);
+                    break;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = TextosErrores.SinRespuesta;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private static Dictionary<string, string[]> JuntoAlCampo(string campo, string codigo) =>
+        new() { [campo] = [TextosErrores.ParaCodigo(codigo)] };
+
+    private void VolverAlListado() => Navegacion.NavigateTo($"usuarios{consultaListado}");
+
+    public void Dispose()
+    {
+        vida.Cancel();
+        vida.Dispose();
+    }
+}

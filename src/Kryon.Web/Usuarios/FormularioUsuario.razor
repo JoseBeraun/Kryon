@@ -1,0 +1,218 @@
+@using Kryon.Contracts.Usuarios
+
+@*
+    Formulario de registro y edición (contracts/ui-usuarios.md → Formulario de registro y edición; FR-024, FR-025,
+    FR-029, FR-035). Solo presenta y recoge datos: las reglas las aplica la API, y los errores que devuelve se muestran
+    junto a cada campo y en un resumen que recibe el foco. Quien lo usa decide qué hacer al guardar y al cancelar.
+*@
+
+@if (TieneErrores)
+{
+    <div role="alert" tabindex="-1" @ref="resumen">
+        <p>@TextosErrores.ParaCodigo(CodigosError.Validacion)</p>
+        <ul>
+            @foreach (var (campo, mensajes) in Errores!)
+            {
+                @foreach (var mensaje in mensajes)
+                {
+                    <li>
+                        @if (IdDeCampo(campo) is { } id)
+                        {
+                            <a href="@($"#{id}")">@mensaje</a>
+                        }
+                        else
+                        {
+                            @mensaje
+                        }
+                    </li>
+                }
+            }
+        </ul>
+    </div>
+}
+
+<form @onsubmit="GuardarAsync">
+    <div>
+        <label for="@IdNombre">Nombre completo (obligatorio)</label>
+        <input id="@IdNombre"
+               type="text"
+               @bind="Valores.NombreCompleto"
+               aria-invalid="@AriaInvalido(Campos.NombreCompleto)"
+               aria-describedby="@DescritoPor(Campos.NombreCompleto)" />
+        @if (MensajesDe(Campos.NombreCompleto) is { Length: > 0 } mensajesNombreCompleto)
+        {
+            <p id="@IdError(Campos.NombreCompleto)">@string.Join(" ", mensajesNombreCompleto)</p>
+        }
+    </div>
+
+    <div>
+        @* Es obligatorio aunque se muestre de solo lectura (FR-024). *@
+        <label for="@IdIdentificador">Identificador de acceso (obligatorio)</label>
+        @if (IdentificadorEditable)
+        {
+            <input id="@IdIdentificador"
+                   type="text"
+                   @bind="Valores.IdentificadorAcceso"
+                   aria-invalid="@AriaInvalido(Campos.IdentificadorAcceso)"
+                   aria-describedby="@DescritoPor(Campos.IdentificadorAcceso)" />
+        }
+        else
+        {
+            @* Solo lectura según acciones.editarIdentificador; si es editable lo decide DEP-4, no esta interfaz. *@
+            <input id="@IdIdentificador"
+                   type="text"
+                   readonly
+                   value="@Valores.IdentificadorAcceso"
+                   aria-invalid="@AriaInvalido(Campos.IdentificadorAcceso)"
+                   aria-describedby="@DescritoPor(Campos.IdentificadorAcceso)" />
+        }
+        @if (MensajesDe(Campos.IdentificadorAcceso) is { Length: > 0 } mensajesIdentificadorAcceso)
+        {
+            <p id="@IdError(Campos.IdentificadorAcceso)">@string.Join(" ", mensajesIdentificadorAcceso)</p>
+        }
+    </div>
+
+    <div>
+        <label for="@IdRol">Rol (obligatorio)</label>
+        @if (EsCuentaPropia)
+        {
+            <input id="@IdRol"
+                   type="text"
+                   readonly
+                   value="@(RolActual?.Nombre ?? "Sin rol asignado")"
+                   aria-describedby="@($"{IdAyudaRol} {DescritoPor(Campos.RolId)}".Trim())" />
+            <p id="@IdAyudaRol">No puedes cambiar tu propio rol</p>
+        }
+        else
+        {
+            <select id="@IdRol"
+                    @bind="Valores.RolId"
+                    aria-invalid="@AriaInvalido(Campos.RolId)"
+                    aria-describedby="@DescritoPor(Campos.RolId)">
+                @if (!Roles.Any(r => r.Id.ToString() == Valores.RolId))
+                {
+                    <option value="">Selecciona un rol</option>
+                }
+                @foreach (var rol in Roles)
+                {
+                    <option value="@rol.Id">@rol.Nombre</option>
+                }
+            </select>
+        }
+        @if (MensajesDe(Campos.RolId) is { Length: > 0 } mensajesRolId)
+        {
+            <p id="@IdError(Campos.RolId)">@string.Join(" ", mensajesRolId)</p>
+        }
+    </div>
+
+    <div>
+        <button type="submit" disabled="@Guardando">Guardar</button>
+        <button type="button" @onclick="AlCancelar">Cancelar</button>
+    </div>
+</form>
+
+@code {
+    private const string IdNombre = "usuario-nombre-completo";
+    private const string IdIdentificador = "usuario-identificador-acceso";
+    private const string IdRol = "usuario-rol";
+    private const string IdAyudaRol = "usuario-rol-ayuda";
+
+    /// <summary>Valores del formulario. Para recargar otros (por ejemplo, <c>actual</c> ante un 412), pasa otra instancia.</summary>
+    [Parameter, EditorRequired]
+    public ValoresFormulario Valores { get; set; } = default!;
+
+    /// <summary>Roles asignables de la empresa actual (<c>GET /api/usuarios/roles-asignables</c>).</summary>
+    [Parameter]
+    public IReadOnlyList<RolResumen> Roles { get; set; } = [];
+
+    /// <summary>Rol actual del usuario; se muestra como texto cuando el rol es de solo lectura.</summary>
+    [Parameter]
+    public RolResumen? RolActual { get; set; }
+
+    /// <summary>La cuenta del actor: el rol es de solo lectura (FR-035).</summary>
+    [Parameter]
+    public bool EsCuentaPropia { get; set; }
+
+    /// <summary><c>acciones.editarIdentificador</c> de la API (DEP-4): la interfaz solo obedece la bandera.</summary>
+    [Parameter]
+    public bool IdentificadorEditable { get; set; }
+
+    /// <summary>
+    /// <c>errors</c> de la API por nombre de campo del contrato. Cada instancia nueva con errores mueve el foco al
+    /// resumen.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyDictionary<string, string[]>? Errores { get; set; }
+
+    /// <summary>Mientras se guarda, "Guardar" queda deshabilitado para no enviar dos veces.</summary>
+    [Parameter]
+    public bool Guardando { get; set; }
+
+    [Parameter]
+    public EventCallback<ValoresFormulario> AlGuardar { get; set; }
+
+    [Parameter]
+    public EventCallback AlCancelar { get; set; }
+
+    private ElementReference resumen;
+    private IReadOnlyDictionary<string, string[]>? erroresMostrados;
+    private bool enfocarResumen;
+
+    private bool TieneErrores => Errores is { Count: > 0 };
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(Errores, erroresMostrados))
+        {
+            erroresMostrados = Errores;
+            enfocarResumen = TieneErrores;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (enfocarResumen && TieneErrores)
+        {
+            enfocarResumen = false;
+            await resumen.FocusAsync();
+        }
+    }
+
+    private Task GuardarAsync() => AlGuardar.InvokeAsync(Valores);
+
+    private string[] MensajesDe(string campo) =>
+        Errores?.FirstOrDefault(e => string.Equals(e.Key, campo, StringComparison.OrdinalIgnoreCase)).Value ?? [];
+
+    private string? AriaInvalido(string campo) => MensajesDe(campo).Length > 0 ? "true" : null;
+
+    private string? DescritoPor(string campo) => MensajesDe(campo).Length > 0 ? IdError(campo) : null;
+
+    private static string IdError(string campo) => $"{IdDeCampo(campo)}-error";
+
+    /// <summary>El control de cada campo del contrato; null si el error no corresponde a ningún campo del formulario.</summary>
+    private static string? IdDeCampo(string campo) => campo.ToLowerInvariant() switch
+    {
+        "nombrecompleto" => IdNombre,
+        "identificadoracceso" => IdIdentificador,
+        "rolid" => IdRol,
+        _ => null,
+    };
+
+    /// <summary>Nombres de campo del contrato, que son las claves de <c>errors</c>.</summary>
+    private static class Campos
+    {
+        public const string NombreCompleto = "nombreCompleto";
+        public const string IdentificadorAcceso = "identificadorAcceso";
+        public const string RolId = "rolId";
+    }
+
+    /// <summary>Valores editables del formulario. <see cref="RolId"/> es texto para enlazarlo al <c>select</c>.</summary>
+    public sealed class ValoresFormulario
+    {
+        public string NombreCompleto { get; set; } = string.Empty;
+
+        public string IdentificadorAcceso { get; set; } = string.Empty;
+
+        public string RolId { get; set; } = string.Empty;
+    }
+}

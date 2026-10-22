@@ -1,0 +1,329 @@
+@page "/usuarios"
+@using Kryon.Contracts.Usuarios
+@using Kryon.Web.Compartido
+@implements IDisposable
+@inject ClienteUsuarios Cliente
+@inject NavigationManager Navegacion
+@inject AvisoNavegacion Aviso
+
+@*
+    Listado de usuarios (contracts/ui-usuarios.md → Listado). La búsqueda, los filtros y la página se leen de la query
+    string y se escriben en ella (FR-018, FR-022). La interfaz no decide permisos: las acciones de cada fila y
+    "Nuevo usuario" salen solo de `acciones` y `puedeRegistrar` de la API (FR-007).
+*@
+
+<PageTitle>Usuarios</PageTitle>
+
+<h1>Usuarios</h1>
+
+<Mensajes Exito="@anuncio" Error="@error" />
+
+@* Sin una respuesta correcta de la API (sin permiso, otro error o fallo de red) no se muestran datos (FR-005, FR-042). *@
+@if (resultado is not null)
+{
+    @if (resultado.PuedeRegistrar)
+    {
+        <button type="button" @onclick="IrANuevoUsuario">Nuevo usuario</button>
+    }
+
+    <FiltrosUsuarios Busqueda="@Busqueda" RolId="@RolId" Estado="@Estado" AlCambiar="AplicarCriterios" />
+
+    @if (resultado.Total == 0)
+    {
+        @* Sin resultados con criterios (EC-11) frente a estado vacío sin criterios (FR-013). *@
+        <p>@(HayCriterios ? "No hay usuarios que coincidan con la búsqueda y los filtros" : "No hay usuarios que mostrar")</p>
+    }
+    else
+    {
+        <table class="listado-usuarios">
+            <caption>Usuarios de la empresa</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Identificador de acceso</th>
+                    <th scope="col">Rol</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var usuario in resultado.Elementos)
+                {
+                    <tr @key="usuario.Id">
+                        <td class="texto-extenso">
+                            @* El espacio va dentro de la expresión: Razor quita el que hay entre el texto y la marca. *@
+                            @(usuario.EsCuentaPropia ? usuario.NombreCompleto + " " : usuario.NombreCompleto)
+                            @if (usuario.EsCuentaPropia)
+                            {
+                                <span class="cuenta-propia">Tú</span>
+                            }
+                        </td>
+                        <td class="texto-extenso">@usuario.IdentificadorAcceso</td>
+                        <td>@(usuario.Rol?.Nombre ?? "Sin rol asignado")</td>
+                        <td>@TextoEstado(usuario.Estado)</td>
+                        <td>
+                            @if (usuario.Acciones.VerDetalle)
+                            {
+                                <a href="@($"usuarios/{usuario.Id}{ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina)}")" aria-label="@($"Ver detalle de {usuario.NombreCompleto}")">Ver detalle</a>
+                            }
+                            @if (usuario.Acciones.Editar)
+                            {
+                                <a href="@($"usuarios/{usuario.Id}/editar{ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina)}")" aria-label="@($"Editar a {usuario.NombreCompleto}")">Editar</a>
+                            }
+                            @if (usuario.Acciones.Activar)
+                            {
+                                @* Activar no pide confirmación (FR-032). *@
+                                <button type="button" aria-label="@($"Activar a {usuario.NombreCompleto}")" @onclick="() => ActivarAsync(usuario)">Activar</button>
+                            }
+                            @if (usuario.Acciones.Desactivar)
+                            {
+                                <button type="button" aria-label="@($"Desactivar a {usuario.NombreCompleto}")" @ref="botonesDesactivar[usuario.Id]" @onclick="() => PedirConfirmacion(usuario)">Desactivar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <PaginacionUsuarios Pagina="@resultado.Pagina" TamanoPagina="@resultado.TamanoPagina" Total="@resultado.Total" AlCambiarPagina="IrAPagina" />
+    }
+}
+
+<ConfirmarDesactivacion Usuario="@porConfirmar" AlConfirmar="ConfirmarDesactivacionAsync" AlCancelar="CancelarDesactivacion" />
+
+@code {
+    /// <summary>Búsqueda parcial (parámetro <c>busqueda</c> del contrato).</summary>
+    [SupplyParameterFromQuery(Name = "busqueda")]
+    public string? Busqueda { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rolId")]
+    public string? RolId { get; set; }
+
+    /// <summary><c>activo</c> o <c>inactivo</c>; la API rechaza cualquier otro valor.</summary>
+    [SupplyParameterFromQuery(Name = "estado")]
+    public string? Estado { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pagina")]
+    public string? Pagina { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tamanoPagina")]
+    public string? TamanoPagina { get; set; }
+
+    private PaginaUsuarios? resultado;
+    private string? anuncio;
+    private string? error;
+    private string? criteriosCargados;
+    private CancellationTokenSource? carga;
+
+    // Desactivar y activar (US2). Las operaciones se cancelan si se sale de la página.
+    private readonly CancellationTokenSource vida = new();
+    private readonly Dictionary<Guid, ElementReference> botonesDesactivar = [];
+    private UsuarioResumen? porConfirmar;
+    private Guid? focoPendiente;
+
+    protected override void OnInitialized()
+    {
+        // Mensaje de éxito que dejó la página anterior (por ejemplo, la edición); se muestra una sola vez (FR-050).
+        anuncio = Aviso.Consumir();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Solo se vuelve a cargar si cambió la query string, no en cada renderizado del padre.
+        var criterios = $"{Busqueda}|{RolId}|{Estado}|{Pagina}|{TamanoPagina}";
+        if (criterios == criteriosCargados)
+        {
+            return;
+        }
+
+        var esCambio = criteriosCargados is not null;
+        criteriosCargados = criterios;
+        await CargarAsync(anunciarResultados: esCambio);
+    }
+
+    /// <summary>
+    /// Pide a la API la página de la query string actual (búsqueda, filtros, página y tamaño). Ante cualquier rechazo o
+    /// sin respuesta no conserva datos anteriores (FR-005, FR-042).
+    /// </summary>
+    /// <param name="anunciarResultados">Anunciar "N usuarios encontrados" (cambió la búsqueda, los filtros o la página).</param>
+    private async Task CargarAsync(bool anunciarResultados)
+    {
+        carga?.Cancel();
+        carga?.Dispose();
+        carga = new CancellationTokenSource();
+        var cancelacion = carga.Token;
+
+        try
+        {
+            var respuesta = await Cliente.ListarUsuariosAsync(
+                string.IsNullOrEmpty(Busqueda) ? null : Busqueda,
+                Guid.TryParse(RolId, out var rol) ? rol : null,
+                string.IsNullOrEmpty(Estado) ? null : Estado,
+                int.TryParse(Pagina, out var numero) ? numero : null,
+                int.TryParse(TamanoPagina, out var tamano) ? tamano : null,
+                cancelacion);
+
+            // Cualquier rechazo de la API (sin-permiso incluido) se muestra con el texto de su código, sin datos.
+            resultado = respuesta.EsCorrecta ? respuesta.Valor : null;
+            error = respuesta.EsCorrecta ? null : TextosErrores.ParaCodigo(respuesta.CodigoError);
+
+            // El anuncio se hace cuando cambian la búsqueda, los filtros o la página (FR-019).
+            anuncio = anunciarResultados && resultado is not null ? $"{resultado.Total} usuarios encontrados" : anuncio;
+        }
+        catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
+        {
+            // Una carga más reciente sustituyó a esta.
+        }
+        catch (HttpRequestException)
+        {
+            // Sin respuesta no se sabe el resultado: no se muestra ningún estado no confirmado (FR-042, EC-8).
+            resultado = null;
+            error = TextosErrores.SinRespuesta;
+        }
+    }
+
+    private bool HayCriterios =>
+        !string.IsNullOrEmpty(Busqueda) || !string.IsNullOrEmpty(RolId) || !string.IsNullOrEmpty(Estado);
+
+    /// <summary>
+    /// Escribe la búsqueda y los filtros en la query string y vuelve a la primera página; el listado se recarga desde
+    /// ella. Los parámetros vacíos se quitan y el resto de la query (como <c>tamanoPagina</c>) se conserva.
+    /// </summary>
+    private void AplicarCriterios(FiltrosUsuarios.CriteriosUsuarios criterios) =>
+        Navegacion.NavigateTo(Navegacion.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["busqueda"] = string.IsNullOrEmpty(criterios.Busqueda) ? null : criterios.Busqueda,
+            ["rolId"] = string.IsNullOrEmpty(criterios.RolId) ? null : criterios.RolId,
+            ["estado"] = string.IsNullOrEmpty(criterios.Estado) ? null : criterios.Estado,
+            ["pagina"] = null,
+        }));
+
+    /// <summary>Cambia solo la página en la query string y conserva los criterios.</summary>
+    private void IrAPagina(int pagina) =>
+        Navegacion.NavigateTo(Navegacion.GetUriWithQueryParameter("pagina", pagina > 1 ? pagina : null));
+
+    /// <summary>"Nuevo usuario": el formulario recibe la query string para volver al mismo listado (FR-022).</summary>
+    private void IrANuevoUsuario() =>
+        Navegacion.NavigateTo($"usuarios/nuevo{ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina)}");
+
+    /// <summary>"Desactivar a {nombre}": abre el diálogo de confirmación; todavía no llama a la API (FR-032, SC-007).</summary>
+    private void PedirConfirmacion(UsuarioResumen usuario)
+    {
+        error = null;
+        porConfirmar = usuario;
+    }
+
+    /// <summary>Cancelar o Escape: se cierra el diálogo sin llamar a la API y el foco vuelve al botón de origen (FR-049).</summary>
+    private void CancelarDesactivacion()
+    {
+        focoPendiente = porConfirmar?.Id;
+        porConfirmar = null;
+    }
+
+    private Task ConfirmarDesactivacionAsync(UsuarioResumen usuario)
+    {
+        porConfirmar = null;
+        return CambiarEstadoAsync(usuario, desactivar: true);
+    }
+
+    private Task ActivarAsync(UsuarioResumen usuario) => CambiarEstadoAsync(usuario, desactivar: false);
+
+    /// <summary>
+    /// Envía la operación con la <c>version</c> de la fila como <c>If-Match</c> y solo muestra lo que el servidor confirma:
+    /// al terminar bien, la fila pasa a ser la respuesta (estado, versión y acciones) y se anuncia el éxito; ante un
+    /// rechazo se muestra el texto de su código y, si la API devuelve <c>actual</c> (412), el estado real (US2-7);
+    /// ante <c>sin-permiso</c> se recarga la página para refrescar <c>acciones</c> (US5-3); sin respuesta, la fila se
+    /// queda como estaba (FR-042, EC-8).
+    /// </summary>
+    private async Task CambiarEstadoAsync(UsuarioResumen usuario, bool desactivar)
+    {
+        error = null;
+        try
+        {
+            var respuesta = desactivar
+                ? await Cliente.DesactivarUsuarioAsync(usuario.Id, usuario.Version, vida.Token)
+                : await Cliente.ActivarUsuarioAsync(usuario.Id, usuario.Version, vida.Token);
+
+            if (respuesta.EsCorrecta)
+            {
+                ReemplazarFila(respuesta.Valor!);
+                anuncio = desactivar ? $"{usuario.NombreCompleto} fue desactivado." : $"{usuario.NombreCompleto} fue activado.";
+                return;
+            }
+
+            if (respuesta.CodigoError == CodigosError.SinPermiso)
+            {
+                // El permiso se retiró desde que se cargó la página (US5-3, EC-7): se vuelve a pedir la misma página
+                // para mostrar las acciones vigentes que calcula la API. Si ya ni siquiera se puede ver el listado, la
+                // recarga no conserva datos y muestra su propio rechazo.
+                anuncio = null;
+                await CargarAsync(anunciarResultados: false);
+                if (resultado is not null)
+                {
+                    MostrarFallo(TextosErrores.ParaCodigo(CodigosError.SinPermiso), usuario, desactivar);
+                }
+
+                return;
+            }
+
+            if (respuesta.Problema?.Actual is { } actual)
+            {
+                ReemplazarFila(actual);
+            }
+
+            MostrarFallo(TextosErrores.ParaCodigo(respuesta.CodigoError), usuario, desactivar);
+        }
+        catch (HttpRequestException)
+        {
+            MostrarFallo(TextosErrores.SinRespuesta, usuario, desactivar);
+        }
+    }
+
+    private void MostrarFallo(string texto, UsuarioResumen usuario, bool desactivar)
+    {
+        anuncio = null;
+        error = texto;
+        if (desactivar)
+        {
+            focoPendiente = usuario.Id;
+        }
+    }
+
+    private void ReemplazarFila(UsuarioResumen vigente)
+    {
+        if (resultado is not null)
+        {
+            resultado = resultado with { Elementos = [.. resultado.Elementos.Select(u => u.Id == vigente.Id ? vigente : u)] };
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // El foco vuelve al botón "Desactivar a {nombre}" que abrió el diálogo, si sigue en la fila (FR-049).
+        if (focoPendiente is { } id)
+        {
+            focoPendiente = null;
+            var sigue = resultado?.Elementos.Any(u => u.Id == id && u.Acciones.Desactivar) == true;
+            if (sigue && botonesDesactivar.TryGetValue(id, out var boton))
+            {
+                await boton.FocusAsync();
+            }
+        }
+    }
+
+    /// <summary>Texto del estado del contrato (FR-010). Un valor que el contrato no define se muestra tal cual.</summary>
+    private static string TextoEstado(string estado) => estado switch
+    {
+        "activo" => "Activo",
+        "inactivo" => "Inactivo",
+        _ => estado,
+    };
+
+    public void Dispose()
+    {
+        carga?.Cancel();
+        carga?.Dispose();
+        vida.Cancel();
+        vida.Dispose();
+    }
+}
