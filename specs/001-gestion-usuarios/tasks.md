@@ -282,7 +282,7 @@ fija ninguna regla sustituta.
 - [ ] T102 [P] [US6] Prueba E2E solo con teclado de navegación en `tests/Kryon.E2E.Tests/Usuarios/FlujoTecladoListadoTests.cs`: usando solo Tab, Shift+Tab, Enter, Espacio y Escape, buscar, filtrar, paginar, abrir el detalle y volver (US6-1, FR-047).
 - [ ] T103 [P] [US6] Prueba E2E solo con teclado de acciones en `tests/Kryon.E2E.Tests/Usuarios/FlujoTecladoAccionesTests.cs`: editar y guardar, desactivar (el foco entra en el diálogo, se confirma y el foco vuelve al origen), cancelar otra desactivación y activar (US6-1, US6-3, FR-047, FR-049).
 - [ ] T104 [P] [US6] Prueba E2E de accesibilidad automática en `tests/Kryon.E2E.Tests/Usuarios/AccesibilidadTests.cs`: ejecutar axe (`Deque.AxeCore.Playwright`) en el listado (con datos, vacío y sin resultados), el detalle, el formulario (con errores) y el diálogo abierto. Cero violaciones de impacto `serious` o `critical` (SC-003).
-- [ ] T105 [P] [US6] Pruebas bUnit de nombres accesibles y anuncios en `tests/Kryon.Web.Tests/Usuarios/NombresAccesiblesTests.cs`: todo `button`, `a`, `input` y `select` tiene nombre accesible; las acciones por fila incluyen el nombre del usuario (US6-2, FR-048); los mensajes de éxito van a `aria-live="polite"` y los errores a `role="alert"`, siempre con texto (US6-4, FR-050).
+- [X] T105 [P] [US6] Pruebas bUnit de nombres accesibles y anuncios en `tests/Kryon.Web.Tests/Usuarios/NombresAccesiblesTests.cs`: todo `button`, `a`, `input` y `select` tiene nombre accesible; las acciones por fila incluyen el nombre del usuario (US6-2, FR-048); los mensajes de éxito van a `aria-live="polite"` y los errores a `role="alert"`, siempre con texto (US6-4, FR-050).
 
 ### Implementation for User Story 6
 
