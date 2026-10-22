@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Claims;
+using System.Text.Json;
 
 using Kryon.Api.Seguridad;
 using Kryon.Contracts.Usuarios;
@@ -15,13 +16,17 @@ namespace Kryon.Api.Usuarios;
 /// <summary>
 /// Endpoints de la Gestión de Usuarios (contracts/usuarios-api.openapi.yaml): <c>GET /api/usuarios</c>,
 /// <c>GET /api/usuarios/roles-asignables</c> y <c>GET /api/usuarios/{id}</c> (política
-/// <see cref="PoliticasUsuarios.Acceder"/>), y
+/// <see cref="PoliticasUsuarios.Acceder"/>), <c>PUT /api/usuarios/{id}</c> (política <see cref="PoliticasUsuarios.Editar"/>,
+/// con <c>If-Match</c> obligatorio), y
 /// <c>POST /api/usuarios/{id}/desactivacion</c> y <c>/activacion</c> (políticas <see cref="PoliticasUsuarios.Desactivar"/>
 /// y <see cref="PoliticasUsuarios.Activar"/>, con <c>If-Match</c> obligatorio). La empresa sale siempre del contexto
 /// verificado: ningún parámetro la indica.
 /// </summary>
 public static class UsuariosEndpoints
 {
+    /// <summary>Clave de <c>errors</c> cuando el cuerpo entero no se puede leer y no hay un campo al que asociar el error.</summary>
+    private const string CampoCuerpo = "cuerpo";
+
     public static IEndpointRouteBuilder MapUsuariosEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/api/usuarios", ListarAsync)
@@ -31,6 +36,9 @@ public static class UsuariosEndpoints
         endpoints.MapGet("/api/usuarios/{id:guid}", ObtenerAsync)
             .RequireAuthorization(PoliticasUsuarios.Acceder)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Consulta);
+        endpoints.MapPut("/api/usuarios/{id:guid}", EditarAsync)
+            .RequireAuthorization(PoliticasUsuarios.Editar)
+            .RegistrarUsuarioNoAccesible(OperacionSolicitada.Edicion);
         endpoints.MapPost("/api/usuarios/{id:guid}/desactivacion", DesactivarAsync)
             .RequireAuthorization(PoliticasUsuarios.Desactivar)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Desactivacion);
@@ -117,7 +125,7 @@ public static class UsuariosEndpoints
         IAuthorizationService autorizacion,
         IContextoSolicitud contexto,
         CancellationToken cancellationToken) =>
-        CambiarEstadoAsync(id, http, cambiarEstado.DesactivarAsync, consulta, autorizacion, contexto, cancellationToken);
+        ModificarAsync(id, http, cambiarEstado.DesactivarAsync, consulta, autorizacion, contexto, cancellationToken);
 
     /// <summary><c>activarUsuario</c>: 200 con el usuario y su nuevo <c>ETag</c>.</summary>
     private static Task<IResult> ActivarAsync(
@@ -128,7 +136,89 @@ public static class UsuariosEndpoints
         IAuthorizationService autorizacion,
         IContextoSolicitud contexto,
         CancellationToken cancellationToken) =>
-        CambiarEstadoAsync(id, http, cambiarEstado.ActivarAsync, consulta, autorizacion, contexto, cancellationToken);
+        ModificarAsync(id, http, cambiarEstado.ActivarAsync, consulta, autorizacion, contexto, cancellationToken);
+
+    /// <summary>
+    /// <c>editarUsuario</c>: nombre completo y rol; 200 con el usuario y su nuevo <c>ETag</c>. El identificador de acceso
+    /// no se edita: mientras el gate <c>EdicionIdentificador</c> esté cerrado (tasks.md → <i>Feature / release gating</i>),
+    /// la edición no lo acepta y responde 400 <c>validacion</c> sin llegar al caso de uso. Abrir el gate y decidir si es
+    /// editable corresponde a T079/T080 (DEP-4).
+    /// </summary>
+    private static Task<IResult> EditarAsync(
+        Guid id,
+        HttpContext http,
+        EditarUsuario editar,
+        IConsultaUsuarios consulta,
+        IAuthorizationService autorizacion,
+        IContextoSolicitud contexto,
+        CancellationToken cancellationToken) =>
+        ModificarAsync(
+            id,
+            http,
+            async (usuarioId, version, ct) =>
+            {
+                var (solicitud, traeIdentificador) = await LeerEdicionAsync(http.Request, ct);
+
+                // Basta con que la propiedad esté presente, aunque sea null: el contrato la define como texto opcional,
+                // no anulable, y con el gate cerrado la edición no la acepta.
+                if (traeIdentificador)
+                {
+                    throw new ErrorUsuarios(
+                        CodigoErrorUsuarios.Validacion,
+                        "La edición no acepta el identificador de acceso.",
+                        new Dictionary<string, IReadOnlyList<string>>
+                        {
+                            [ValidadorUsuario.CampoIdentificadorAcceso] = ["La edición del identificador de acceso no está disponible."],
+                        });
+                }
+
+                return await editar.EditarAsync(usuarioId, version, solicitud.NombreCompleto, solicitud.RolId, ct);
+            },
+            consulta,
+            autorizacion,
+            contexto,
+            cancellationToken);
+
+    /// <summary>
+    /// Lee el cuerpo <c>EditarUsuario</c> e indica si trae la propiedad <c>identificadorAcceso</c>, con cualquier valor
+    /// (incluido <c>null</c>). Un cuerpo vacío, mal formado, con campos que el contrato no define o sin los obligatorios
+    /// responde 400 <c>validacion</c> del contrato, no un error genérico del enlazado.
+    /// </summary>
+    private static async Task<(EditarUsuarioSolicitud Solicitud, bool TraeIdentificador)> LeerEdicionAsync(
+        HttpRequest request,
+        CancellationToken cancellationToken)
+    {
+        var opciones = request.HttpContext.RequestServices.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
+        EditarUsuarioSolicitud? solicitud = null;
+        var traeIdentificador = false;
+        try
+        {
+            var cuerpo = await request.ReadFromJsonAsync<JsonElement>(opciones, cancellationToken);
+            if (cuerpo.ValueKind == JsonValueKind.Object)
+            {
+                // Mismo criterio de nombres que el enlazado (sin distinguir mayúsculas con las opciones web).
+                traeIdentificador = cuerpo.EnumerateObject().Any(propiedad => string.Equals(
+                    propiedad.Name,
+                    ValidadorUsuario.CampoIdentificadorAcceso,
+                    opciones.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+                solicitud = cuerpo.Deserialize<EditarUsuarioSolicitud>(opciones);
+            }
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            solicitud = null;
+        }
+
+        return (
+            solicitud ?? throw new ErrorUsuarios(
+                CodigoErrorUsuarios.Validacion,
+                "El cuerpo de la solicitud no es válido.",
+                new Dictionary<string, IReadOnlyList<string>>
+                {
+                    [CampoCuerpo] = ["Envía un objeto JSON con nombreCompleto y rolId, sin otros campos."],
+                }),
+            traeIdentificador);
+    }
 
     /// <summary>
     /// Flujo común: <c>If-Match</c> obligatorio (428 <c>falta-version</c>), ejecutar el caso de uso y responder el
@@ -136,10 +226,10 @@ public static class UsuariosEndpoints
     /// ante <c>usuario-no-encontrado</c>, el mismo 404 para un id de otra empresa y uno inexistente (FR-003), que audita
     /// el filtro <see cref="RegistroUsuarioNoAccesible"/>.
     /// </summary>
-    private static async Task<IResult> CambiarEstadoAsync(
+    private static async Task<IResult> ModificarAsync(
         Guid id,
         HttpContext http,
-        Func<Guid, byte[], CancellationToken, Task<Usuario>> cambiar,
+        Func<Guid, byte[], CancellationToken, Task<Usuario>> modificar,
         IConsultaUsuarios consulta,
         IAuthorizationService autorizacion,
         IContextoSolicitud contexto,
@@ -153,7 +243,7 @@ public static class UsuariosEndpoints
 
         try
         {
-            await cambiar(id, VersionEtag.Leer(ifMatch), cancellationToken);
+            await modificar(id, VersionEtag.Leer(ifMatch), cancellationToken);
         }
         catch (ErrorUsuarios error) when (error.Codigo == CodigoErrorUsuarios.UsuarioModificado)
         {

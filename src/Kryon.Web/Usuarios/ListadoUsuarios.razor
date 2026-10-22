@@ -4,6 +4,7 @@
 @implements IDisposable
 @inject ClienteUsuarios Cliente
 @inject NavigationManager Navegacion
+@inject AvisoNavegacion Aviso
 
 @*
     Listado de usuarios (contracts/ui-usuarios.md → Listado). La búsqueda, los filtros y la página se leen de la query
@@ -67,7 +68,7 @@
                             }
                             @if (usuario.Acciones.Editar)
                             {
-                                <a href="@($"usuarios/{usuario.Id}/editar")" aria-label="@($"Editar a {usuario.NombreCompleto}")">Editar</a>
+                                <a href="@($"usuarios/{usuario.Id}/editar{ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina)}")" aria-label="@($"Editar a {usuario.NombreCompleto}")">Editar</a>
                             }
                             @if (usuario.Acciones.Activar)
                             {
@@ -119,6 +120,12 @@
     private readonly Dictionary<Guid, ElementReference> botonesDesactivar = [];
     private UsuarioResumen? porConfirmar;
     private Guid? focoPendiente;
+
+    protected override void OnInitialized()
+    {
+        // Mensaje de éxito que dejó la página anterior (por ejemplo, la edición); se muestra una sola vez (FR-050).
+        anuncio = Aviso.Consumir();
+    }
 
     protected override async Task OnParametersSetAsync()
     {

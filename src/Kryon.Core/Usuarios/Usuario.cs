@@ -125,6 +125,23 @@ public sealed class Usuario
     }
 
     /// <summary>
+    /// Cambia el nombre completo (US4). Las longitudes y la obligatoriedad con mensajes por campo las valida
+    /// <c>ValidadorUsuario</c>; aquí solo se recorta y se rechaza un valor vacío.
+    /// </summary>
+    public void CambiarNombreCompleto(string nombreCompleto) =>
+        NombreCompleto = NormalizarNombreCompleto(nombreCompleto);
+
+    /// <summary>
+    /// Cambia el rol (US4). Que el rol sea de la empresa actual, la regla del propio rol y la del último administrador
+    /// las comprueba el caso de uso.
+    /// </summary>
+    public void CambiarRol(Guid rolId)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(rolId, Guid.Empty);
+        RolId = rolId;
+    }
+
+    /// <summary>
     /// El usuario debe estar en el estado de origen de la transición. Si no lo está, otra persona lo cambió desde que se
     /// cargó la pantalla: se informa como <c>usuario-modificado</c> con el estado actual (data-model.md, precondición 5).
     /// </summary>

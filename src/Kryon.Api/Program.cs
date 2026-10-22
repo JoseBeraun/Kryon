@@ -10,6 +10,7 @@ using Kryon.Infrastructure.Usuarios;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 
 const string PoliticaCorsKryonWebLocal = "KryonWebLocal";
@@ -94,6 +95,12 @@ builder.Services.AddSingleton(TimeProvider.System);
 // Casos de uso de Core: por solicitud, como el contexto y la consulta de los que dependen.
 builder.Services.AddScoped<ListarUsuarios>();
 builder.Services.AddScoped<CambiarEstadoUsuario>();
+
+// El validador recibe las opciones ya resueltas: Core no depende de IOptions.
+builder.Services.AddScoped(proveedor => new ValidadorUsuario(
+    proveedor.GetRequiredService<IOptions<OpcionesUsuarios>>().Value,
+    proveedor.GetRequiredService<IConsultaUsuarios>()));
+builder.Services.AddScoped<EditarUsuario>();
 
 // Excepciones no controladas: 500 genérico del contrato en todos los entornos (FR-041, SC-004).
 // UseExceptionHandler() sin parámetros exige un IProblemDetailsService; el manejador responde antes que él.

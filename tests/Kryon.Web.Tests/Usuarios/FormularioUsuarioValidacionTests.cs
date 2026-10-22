@@ -64,10 +64,10 @@ public sealed class FormularioUsuarioValidacionTests : IAsyncDisposable
             Assert.False(string.IsNullOrWhiteSpace(etiqueta.GetAttribute("for")), $"La etiqueta \"{campo}\" no está asociada a su campo.");
             Assert.NotNull(corte.Find($"[id='{etiqueta.GetAttribute("for")}']"));
             Assert.Null(etiqueta.GetAttribute("hidden"));
-        }
 
-        Assert.Contains("obligatorio", Normalizar(Etiqueta(corte, "Nombre completo").TextContent), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("obligatorio", Normalizar(Etiqueta(corte, "Rol").TextContent), StringComparison.OrdinalIgnoreCase);
+            // Los tres datos son obligatorios (FR-024), también el identificador cuando se muestra de solo lectura.
+            Assert.Contains("obligatorio", Normalizar(etiqueta.TextContent), StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]

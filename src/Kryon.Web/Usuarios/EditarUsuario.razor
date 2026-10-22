@@ -1,0 +1,201 @@
+@page "/usuarios/{Id:guid}/editar"
+@using Kryon.Contracts.Usuarios
+@using Kryon.Web.Compartido
+@implements IDisposable
+@inject ClienteUsuarios Cliente
+@inject NavigationManager Navegacion
+@inject AvisoNavegacion Aviso
+
+@*
+    Edición de un usuario (contracts/ui-usuarios.md → Formulario de registro y edición; US4, FR-022, FR-039). Carga el
+    usuario con su versión, envía la edición con If-Match y solo muestra lo que el servidor confirma. Al guardar o al
+    cancelar vuelve al listado con su query string; al guardar, el listado anuncia el éxito.
+*@
+
+<PageTitle>Editar usuario</PageTitle>
+
+<Mensajes Error="@error" />
+
+@if (noEncontrado)
+{
+    <h1>Usuario no encontrado</h1>
+    <a href="@($"usuarios{consultaListado}")">Volver al listado</a>
+}
+else if (usuario is not null && valores is not null)
+{
+    <h1>Editar a @usuario.NombreCompleto</h1>
+
+    <FormularioUsuario Valores="@valores"
+                       Roles="@roles"
+                       RolActual="@usuario.Rol"
+                       EsCuentaPropia="@usuario.EsCuentaPropia"
+                       IdentificadorEditable="@usuario.Acciones.EditarIdentificador"
+                       Errores="@errores"
+                       Guardando="@guardando"
+                       AlGuardar="GuardarAsync"
+                       AlCancelar="VolverAlListado" />
+}
+else if (error is not null)
+{
+    <a href="@($"usuarios{consultaListado}")">Volver al listado</a>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "busqueda")]
+    public string? Busqueda { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rolId")]
+    public string? RolId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "estado")]
+    public string? Estado { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pagina")]
+    public string? Pagina { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tamanoPagina")]
+    public string? TamanoPagina { get; set; }
+
+    private readonly CancellationTokenSource vida = new();
+    private DetalleUsuario? usuario;
+    private FormularioUsuario.ValoresFormulario? valores;
+    private IReadOnlyList<RolResumen> roles = [];
+    private IReadOnlyDictionary<string, string[]>? errores;
+    private string version = string.Empty;
+    private bool noEncontrado;
+    private bool guardando;
+    private string? error;
+    private string consultaListado = string.Empty;
+    private Guid? cargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        consultaListado = ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina);
+        if (cargado == Id)
+        {
+            return;
+        }
+
+        cargado = Id;
+        usuario = null;
+        noEncontrado = false;
+        error = null;
+        errores = null;
+
+        try
+        {
+            var respuesta = await Cliente.ObtenerUsuarioAsync(Id, vida.Token);
+            if (!respuesta.EsCorrecta)
+            {
+                // Mismo mensaje para un id de otra empresa y uno inexistente (EC-1, FR-003).
+                noEncontrado = respuesta.CodigoError == CodigosError.UsuarioNoEncontrado;
+                error = noEncontrado ? null : TextosErrores.ParaCodigo(respuesta.CodigoError);
+                return;
+            }
+
+            // El rol solo se elige si no es la propia cuenta; aun así, la lista se carga para mostrar el formulario completo.
+            var listaRoles = await Cliente.ListarRolesAsignablesAsync(vida.Token);
+            if (!listaRoles.EsCorrecta)
+            {
+                error = TextosErrores.ParaCodigo(listaRoles.CodigoError);
+                return;
+            }
+
+            roles = listaRoles.Valor!;
+            Mostrar(respuesta.Valor!, respuesta.ETag);
+        }
+        catch (HttpRequestException)
+        {
+            error = TextosErrores.SinRespuesta;
+        }
+    }
+
+    /// <summary>Muestra el usuario confirmado por la API y guarda su versión para el próximo <c>If-Match</c>.</summary>
+    private void Mostrar(DetalleUsuario confirmado, string? etag)
+    {
+        usuario = confirmado;
+        version = etag ?? confirmado.Version;
+        valores = new FormularioUsuario.ValoresFormulario
+        {
+            NombreCompleto = confirmado.NombreCompleto,
+            IdentificadorAcceso = confirmado.IdentificadorAcceso,
+            RolId = confirmado.Rol?.Id.ToString() ?? string.Empty,
+        };
+    }
+
+    private async Task GuardarAsync(FormularioUsuario.ValoresFormulario enviados)
+    {
+        if (usuario is null || guardando)
+        {
+            return;
+        }
+
+        guardando = true;
+        error = null;
+        errores = null;
+        try
+        {
+            var solicitud = new EditarUsuarioSolicitud
+            {
+                NombreCompleto = enviados.NombreCompleto,
+
+                // La propia cuenta conserva su rol; un rol sin elegir viaja vacío y la API lo rechaza por campo.
+                RolId = usuario.EsCuentaPropia
+                    ? usuario.Rol?.Id ?? Guid.Empty
+                    : Guid.TryParse(enviados.RolId, out var rol) ? rol : Guid.Empty,
+
+                // Solo si la API lo permite (acciones.editarIdentificador, DEP-4) y cambió.
+                IdentificadorAcceso = usuario.Acciones.EditarIdentificador && enviados.IdentificadorAcceso != usuario.IdentificadorAcceso
+                    ? enviados.IdentificadorAcceso
+                    : null,
+            };
+
+            var respuesta = await Cliente.EditarUsuarioAsync(usuario.Id, solicitud, version, vida.Token);
+            if (respuesta.EsCorrecta)
+            {
+                // El listado lo anuncia al mostrarse (contracts/ui-usuarios.md → Mensajes; FR-050).
+                Aviso.Dejar($"Usuario {respuesta.Valor!.NombreCompleto} guardado.");
+                VolverAlListado();
+                return;
+            }
+
+            switch (respuesta.CodigoError)
+            {
+                case CodigosError.Validacion when respuesta.Problema?.Errors is { Count: > 0 } porCampo:
+                    errores = porCampo;
+                    break;
+                case CodigosError.RolNoValido:
+                    // Se muestra junto al campo Rol (contracts/ui-usuarios.md → Mensajes).
+                    errores = new Dictionary<string, string[]> { ["rolId"] = [TextosErrores.ParaCodigo(CodigosError.RolNoValido)] };
+                    break;
+                case CodigosError.UsuarioModificado when respuesta.Problema?.Actual is { } actual:
+                    // Se recargan los datos actuales y no se guarda nada (FR-039).
+                    Mostrar(actual, actual.Version);
+                    error = TextosErrores.ParaCodigo(CodigosError.UsuarioModificado);
+                    break;
+                default:
+                    error = TextosErrores.ParaCodigo(respuesta.CodigoError);
+                    break;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = TextosErrores.SinRespuesta;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private void VolverAlListado() => Navegacion.NavigateTo($"usuarios{consultaListado}");
+
+    public void Dispose()
+    {
+        vida.Cancel();
+        vida.Dispose();
+    }
+}

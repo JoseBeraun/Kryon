@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Bunit;
 
 using Kryon.Contracts.Usuarios;
+using Kryon.Web.Compartido;
 using Kryon.Web.Usuarios;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,7 @@ public sealed class ContextoPruebaWeb : BunitContext
     public ContextoPruebaWeb()
     {
         Services.AddSingleton(new ClienteUsuarios(new HttpClient(Http) { BaseAddress = UrlBase }));
+        Services.AddSingleton<AvisoNavegacion>();
     }
 
     /// <summary>Handler falso de este contexto: cada prueba asigna su <see cref="HttpFalso.Responder"/>.</summary>

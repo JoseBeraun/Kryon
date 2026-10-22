@@ -30,6 +30,9 @@ if (!urlBaseApi.AbsolutePath.EndsWith('/'))
 RegistrarHttpClientApi(builder.Services, urlBaseApi, builder.HostEnvironment, builder.Configuration);
 builder.Services.AddScoped<ClienteUsuarios>();
 
+// Mensaje de éxito que una página deja a la siguiente al navegar ("Usuario {nombre} guardado.").
+builder.Services.AddScoped<Kryon.Web.Compartido.AvisoNavegacion>();
+
 await builder.Build().RunAsync();
 
 public partial class Program
