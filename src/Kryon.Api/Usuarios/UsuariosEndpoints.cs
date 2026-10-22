@@ -16,7 +16,8 @@ namespace Kryon.Api.Usuarios;
 /// <summary>
 /// Endpoints de la Gestión de Usuarios (contracts/usuarios-api.openapi.yaml): <c>GET /api/usuarios</c>,
 /// <c>GET /api/usuarios/roles-asignables</c> y <c>GET /api/usuarios/{id}</c> (política
-/// <see cref="PoliticasUsuarios.Acceder"/>), <c>PUT /api/usuarios/{id}</c> (política <see cref="PoliticasUsuarios.Editar"/>,
+/// <see cref="PoliticasUsuarios.Acceder"/>), <c>POST /api/usuarios</c> (política <see cref="PoliticasUsuarios.Registrar"/>,
+/// solo con el gate <see cref="GateRegistroUsuarios"/> abierto), <c>PUT /api/usuarios/{id}</c> (política <see cref="PoliticasUsuarios.Editar"/>,
 /// con <c>If-Match</c> obligatorio), y
 /// <c>POST /api/usuarios/{id}/desactivacion</c> y <c>/activacion</c> (políticas <see cref="PoliticasUsuarios.Desactivar"/>
 /// y <see cref="PoliticasUsuarios.Activar"/>, con <c>If-Match</c> obligatorio). La empresa sale siempre del contexto
@@ -36,6 +37,15 @@ public static class UsuariosEndpoints
         endpoints.MapGet("/api/usuarios/{id:guid}", ObtenerAsync)
             .RequireAuthorization(PoliticasUsuarios.Acceder)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Consulta);
+
+        // Gate RegistroUsuarios (tasks.md → Feature / release gating): sin los puntos de integración de DEP-2, DEP-3 y
+        // DEP-5 registrados, el registro no se entrega y el endpoint no existe.
+        if (GateRegistroUsuarios.EstaAbierto(endpoints.ServiceProvider.GetRequiredService<IServiceProviderIsService>()))
+        {
+            endpoints.MapPost("/api/usuarios", RegistrarAsync)
+                .RequireAuthorization(PoliticasUsuarios.Registrar);
+        }
+
         endpoints.MapPut("/api/usuarios/{id:guid}", EditarAsync)
             .RequireAuthorization(PoliticasUsuarios.Editar)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Edicion);
@@ -180,45 +190,91 @@ public static class UsuariosEndpoints
             cancellationToken);
 
     /// <summary>
+    /// <c>registrarUsuario</c>: 201 con el usuario creado, <c>Location</c> y <c>ETag</c>. Solo se mapea con el gate
+    /// <c>RegistroUsuarios</c> abierto. La empresa no viaja en el cuerpo: sale del contexto verificado (FR-023).
+    /// </summary>
+    private static async Task<IResult> RegistrarAsync(
+        HttpContext http,
+        RegistrarUsuario registrar,
+        IConsultaUsuarios consulta,
+        IAuthorizationService autorizacion,
+        IContextoSolicitud contexto,
+        CancellationToken cancellationToken)
+    {
+        Usuario usuario;
+        try
+        {
+            var (solicitud, _) = await LeerCuerpoAsync<RegistrarUsuarioSolicitud>(
+                http.Request,
+                "Envía un objeto JSON con nombreCompleto, identificadorAcceso y rolId, sin otros campos.",
+                cancellationToken);
+            usuario = await registrar.RegistrarAsync(solicitud.NombreCompleto, solicitud.IdentificadorAcceso, solicitud.RolId, cancellationToken);
+        }
+        catch (ErrorUsuarios error)
+        {
+            return error.ARespuesta();
+        }
+
+        var detalle = await DetalleAsync(usuario.Id, consulta, autorizacion, http.User, contexto, cancellationToken)
+            ?? throw new InvalidOperationException("El usuario recién registrado no es accesible en su propia empresa.");
+        http.Response.Headers.ETag = detalle.Version;
+        return TypedResults.Created($"/api/usuarios/{usuario.Id}", detalle);
+    }
+
+    /// <summary>
     /// Lee el cuerpo <c>EditarUsuario</c> e indica si trae la propiedad <c>identificadorAcceso</c>, con cualquier valor
-    /// (incluido <c>null</c>). Un cuerpo vacío, mal formado, con campos que el contrato no define o sin los obligatorios
-    /// responde 400 <c>validacion</c> del contrato, no un error genérico del enlazado.
+    /// (incluido <c>null</c>).
     /// </summary>
     private static async Task<(EditarUsuarioSolicitud Solicitud, bool TraeIdentificador)> LeerEdicionAsync(
         HttpRequest request,
         CancellationToken cancellationToken)
     {
-        var opciones = request.HttpContext.RequestServices.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
-        EditarUsuarioSolicitud? solicitud = null;
-        var traeIdentificador = false;
+        var (solicitud, cuerpo) = await LeerCuerpoAsync<EditarUsuarioSolicitud>(
+            request,
+            "Envía un objeto JSON con nombreCompleto y rolId, sin otros campos.",
+            cancellationToken);
+
+        // Mismo criterio de nombres que el enlazado (sin distinguir mayúsculas con las opciones web).
+        var opciones = OpcionesJson(request);
+        var traeIdentificador = cuerpo.EnumerateObject().Any(propiedad => string.Equals(
+            propiedad.Name,
+            ValidadorUsuario.CampoIdentificadorAcceso,
+            opciones.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+        return (solicitud, traeIdentificador);
+    }
+
+    /// <summary>
+    /// Lee un cuerpo JSON del contrato. Un cuerpo vacío, mal formado, con campos que el contrato no define o sin los
+    /// obligatorios responde 400 <c>validacion</c> del contrato, no un error genérico del enlazado.
+    /// </summary>
+    private static async Task<(T Solicitud, JsonElement Cuerpo)> LeerCuerpoAsync<T>(
+        HttpRequest request,
+        string indicacion,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        var opciones = OpcionesJson(request);
         try
         {
             var cuerpo = await request.ReadFromJsonAsync<JsonElement>(opciones, cancellationToken);
-            if (cuerpo.ValueKind == JsonValueKind.Object)
+            if (cuerpo.ValueKind == JsonValueKind.Object && cuerpo.Deserialize<T>(opciones) is { } solicitud)
             {
-                // Mismo criterio de nombres que el enlazado (sin distinguir mayúsculas con las opciones web).
-                traeIdentificador = cuerpo.EnumerateObject().Any(propiedad => string.Equals(
-                    propiedad.Name,
-                    ValidadorUsuario.CampoIdentificadorAcceso,
-                    opciones.PropertyNameCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-                solicitud = cuerpo.Deserialize<EditarUsuarioSolicitud>(opciones);
+                return (solicitud, cuerpo);
             }
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException)
         {
-            solicitud = null;
+            // Se responde como cualquier otro cuerpo no válido.
         }
 
-        return (
-            solicitud ?? throw new ErrorUsuarios(
-                CodigoErrorUsuarios.Validacion,
-                "El cuerpo de la solicitud no es válido.",
-                new Dictionary<string, IReadOnlyList<string>>
-                {
-                    [CampoCuerpo] = ["Envía un objeto JSON con nombreCompleto y rolId, sin otros campos."],
-                }),
-            traeIdentificador);
+        throw new ErrorUsuarios(
+            CodigoErrorUsuarios.Validacion,
+            "El cuerpo de la solicitud no es válido.",
+            new Dictionary<string, IReadOnlyList<string>> { [CampoCuerpo] = [indicacion] });
     }
+
+    private static JsonSerializerOptions OpcionesJson(HttpRequest request) =>
+        request.HttpContext.RequestServices.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
 
     /// <summary>
     /// Flujo común: <c>If-Match</c> obligatorio (428 <c>falta-version</c>), ejecutar el caso de uso y responder el

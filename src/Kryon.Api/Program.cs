@@ -102,6 +102,11 @@ builder.Services.AddScoped(proveedor => new ValidadorUsuario(
     proveedor.GetRequiredService<IConsultaUsuarios>()));
 builder.Services.AddScoped<EditarUsuario>();
 
+// Registro (T087): depende de DEP-2, DEP-3 y DEP-5, que no tienen adaptadores reales (T090-T094), así que el gate
+// RegistroUsuarios está cerrado y POST /api/usuarios no se mapea. Se registra con una fábrica para que la validación
+// del contenedor al arrancar (Development) no exija esas dependencias mientras el gate siga cerrado.
+builder.Services.AddScoped(proveedor => ActivatorUtilities.CreateInstance<RegistrarUsuario>(proveedor));
+
 // Excepciones no controladas: 500 genérico del contrato en todos los entornos (FR-041, SC-004).
 // UseExceptionHandler() sin parámetros exige un IProblemDetailsService; el manejador responde antes que él.
 builder.Services.AddProblemDetails();

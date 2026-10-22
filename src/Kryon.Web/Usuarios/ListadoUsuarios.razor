@@ -193,7 +193,9 @@
     private void IrAPagina(int pagina) =>
         Navegacion.NavigateTo(Navegacion.GetUriWithQueryParameter("pagina", pagina > 1 ? pagina : null));
 
-    private void IrANuevoUsuario() => Navegacion.NavigateTo("usuarios/nuevo");
+    /// <summary>"Nuevo usuario": el formulario recibe la query string para volver al mismo listado (FR-022).</summary>
+    private void IrANuevoUsuario() =>
+        Navegacion.NavigateTo($"usuarios/nuevo{ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina)}");
 
     /// <summary>"Desactivar a {nombre}": abre el diálogo de confirmación; todavía no llama a la API (FR-032, SC-007).</summary>
     private void PedirConfirmacion(UsuarioResumen usuario)
