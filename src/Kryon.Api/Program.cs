@@ -79,6 +79,7 @@ builder.Services.AddDbContext<KryonDbContext>((proveedor, opciones) =>
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IRegistroAuditoria, RegistroAuditoria>();
 builder.Services.AddScoped<IConsultaUsuarios, ConsultaUsuarios>();
+builder.Services.AddScoped<IBloqueoAdministradoresEmpresa, BloqueoAdministradoresEmpresa>();
 
 // Casos de uso de Core: por solicitud, como el contexto y la consulta de los que dependen.
 builder.Services.AddScoped<ListarUsuarios>();

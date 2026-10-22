@@ -91,6 +91,51 @@ public sealed class Usuario
     /// <summary>UTC.</summary>
     public DateTimeOffset ModificadoEn { get; private set; }
 
+    /// <summary>
+    /// Pasa el usuario de Activo a Inactivo (data-model.md → <i>Transiciones de estado</i>). Aplica solo las
+    /// precondiciones que no dependen de la base de datos; la del último administrador, la versión y el permiso los
+    /// comprueba el caso de uso.
+    /// </summary>
+    /// <param name="actorUsuarioId">Usuario que realiza la acción, tomado del contexto verificado.</param>
+    /// <exception cref="ErrorUsuarios">
+    /// <see cref="CodigoErrorUsuarios.NoPuedeDesactivarseASiMismo"/> si es la cuenta del actor (FR-034);
+    /// <see cref="CodigoErrorUsuarios.UsuarioModificado"/> si ya no está Activo (EC-2).
+    /// </exception>
+    public void Desactivar(Guid actorUsuarioId)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(actorUsuarioId, Guid.Empty);
+
+        if (actorUsuarioId == Id)
+        {
+            throw new ErrorUsuarios(CodigoErrorUsuarios.NoPuedeDesactivarseASiMismo, "No se puede desactivar la propia cuenta.");
+        }
+
+        ExigirEstado(EstadoUsuario.Activo);
+        Estado = EstadoUsuario.Inactivo;
+    }
+
+    /// <summary>Pasa el usuario de Inactivo a Activo (data-model.md → <i>Transiciones de estado</i>).</summary>
+    /// <exception cref="ErrorUsuarios">
+    /// <see cref="CodigoErrorUsuarios.UsuarioModificado"/> si ya no está Inactivo (EC-2).
+    /// </exception>
+    public void Activar()
+    {
+        ExigirEstado(EstadoUsuario.Inactivo);
+        Estado = EstadoUsuario.Activo;
+    }
+
+    /// <summary>
+    /// El usuario debe estar en el estado de origen de la transición. Si no lo está, otra persona lo cambió desde que se
+    /// cargó la pantalla: se informa como <c>usuario-modificado</c> con el estado actual (data-model.md, precondición 5).
+    /// </summary>
+    private void ExigirEstado(EstadoUsuario origen)
+    {
+        if (Estado != origen)
+        {
+            throw new ErrorUsuarios(CodigoErrorUsuarios.UsuarioModificado, "El estado del usuario cambió desde que se consultó.");
+        }
+    }
+
     private static string NormalizarNombreCompleto(string nombreCompleto)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nombreCompleto);
