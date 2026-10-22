@@ -43,5 +43,37 @@ jobs:
       - name: Test Kryon.Web.Tests
         run: dotnet test tests/Kryon.Web.Tests/Kryon.Web.Tests.csproj --no-build
 
+      # Pruebas E2E (T100, T101). Su preparación ocurre aquí, no en el código de pruebas, y en este orden:
+      # restore y build (arriba) → herramientas locales → SQL idempotente → comprobación del SQL → build E2E de
+      # Kryon.Web → navegadores de Playwright → dependencias del sistema del runner → pruebas E2E.
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Generate idempotent migrations SQL
+        shell: pwsh
+        run: ./scripts/generar-migracion.ps1
+
+      - name: Verify idempotent migrations SQL
+        shell: pwsh
+        run: |
+          if (-not (Test-Path artifacts/sql/kryon-migraciones-idempotente.sql)) {
+            throw 'Falta artifacts/sql/kryon-migraciones-idempotente.sql: scripts/generar-migracion.ps1 no lo generó.'
+          }
+
+      # Build propio de Kryon.Web para E2E: en .NET 10 el entorno de WebAssembly se fija al compilar. Usa su propia
+      # configuración (bin/E2E, obj/E2E), así que no toca el build Debug, y lee wwwroot/appsettings.E2E.json, no el de
+      # Development.
+      - name: Build Kryon.Web for E2E
+        run: dotnet build src/Kryon.Web/Kryon.Web.csproj --configuration E2E -p:WasmApplicationEnvironmentName=E2E
+
+      # playwright.ps1 lo genera Microsoft.Playwright al compilar Kryon.E2E.Tests (configuración Debug del build).
+      - name: Install Playwright browsers
+        shell: pwsh
+        run: ./tests/Kryon.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install chromium
+
+      - name: Install Playwright system dependencies
+        shell: pwsh
+        run: ./tests/Kryon.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install-deps chromium
+
       - name: Test Kryon.E2E.Tests
         run: dotnet test tests/Kryon.E2E.Tests/Kryon.E2E.Tests.csproj --no-build
