@@ -1,0 +1,227 @@
+@page "/usuarios/{Id:guid}"
+@* Espacio de nombres propio: en Kryon.Web.Usuarios el nombre DetalleUsuario ya lo usa el DTO de Kryon.Contracts. *@
+@namespace Kryon.Web.Usuarios.Detalle
+@using Kryon.Contracts.Usuarios
+@using Kryon.Web.Usuarios
+@using Kryon.Web.Compartido
+@implements IDisposable
+@inject ClienteUsuarios Cliente
+
+@*
+    Detalle de un usuario (contracts/ui-usuarios.md → Detalle; US3, EC-1, EC-4). Solo lectura. Las acciones salen de
+    `acciones` de la API, igual que en el listado (FR-007), y la desactivación usa el mismo diálogo de confirmación.
+    La query string del listado se conserva para "Volver al listado" (FR-022, US3-2).
+*@
+
+<PageTitle>Detalle de usuario</PageTitle>
+
+<Mensajes Exito="@anuncio" Error="@error" />
+
+@if (noEncontrado)
+{
+    <h1>Usuario no encontrado</h1>
+}
+else if (usuario is not null)
+{
+    <h1>
+        @* El espacio va dentro de la expresión: Razor quita el que hay entre el texto y la marca. *@
+        @(usuario.EsCuentaPropia ? usuario.NombreCompleto + " " : usuario.NombreCompleto)
+        @if (usuario.EsCuentaPropia)
+        {
+            <span class="cuenta-propia">Tú</span>
+        }
+    </h1>
+
+    <dl>
+        <dt>Nombre completo</dt>
+        <dd>@usuario.NombreCompleto</dd>
+        <dt>Identificador de acceso</dt>
+        <dd>@usuario.IdentificadorAcceso</dd>
+        <dt>Rol</dt>
+        <dd>@(usuario.Rol?.Nombre ?? "Sin rol asignado")</dd>
+        <dt>Estado</dt>
+        <dd>@TextoEstado(usuario.Estado)</dd>
+    </dl>
+
+    <div>
+        @if (usuario.Acciones.Editar)
+        {
+            <a href="@($"usuarios/{usuario.Id}/editar{consultaListado}")" aria-label="@($"Editar a {usuario.NombreCompleto}")">Editar</a>
+        }
+        @if (usuario.Acciones.Activar)
+        {
+            <button type="button" aria-label="@($"Activar a {usuario.NombreCompleto}")" @onclick="() => CambiarEstadoAsync(desactivar: false)">Activar</button>
+        }
+        @if (usuario.Acciones.Desactivar)
+        {
+            <button type="button" aria-label="@($"Desactivar a {usuario.NombreCompleto}")" @ref="botonDesactivar" @onclick="PedirConfirmacion">Desactivar</button>
+        }
+    </div>
+}
+
+@if (noEncontrado || usuario is not null || error is not null)
+{
+    <a href="@($"usuarios{consultaListado}")">Volver al listado</a>
+}
+
+<ConfirmarDesactivacion Usuario="@porConfirmar" AlConfirmar="ConfirmarDesactivacionAsync" AlCancelar="CancelarDesactivacion" />
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "busqueda")]
+    public string? Busqueda { get; set; }
+
+    [SupplyParameterFromQuery(Name = "rolId")]
+    public string? RolId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "estado")]
+    public string? Estado { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pagina")]
+    public string? Pagina { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tamanoPagina")]
+    public string? TamanoPagina { get; set; }
+
+    private readonly CancellationTokenSource vida = new();
+    private UsuarioResumen? usuario;
+    private bool noEncontrado;
+    private string? anuncio;
+    private string? error;
+    private string consultaListado = string.Empty;
+    private Guid? cargado;
+    private UsuarioResumen? porConfirmar;
+    private ElementReference botonDesactivar;
+    private bool devolverFoco;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        consultaListado = ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina);
+        if (cargado == Id)
+        {
+            return;
+        }
+
+        cargado = Id;
+        usuario = null;
+        noEncontrado = false;
+        anuncio = null;
+        error = null;
+
+        try
+        {
+            var respuesta = await Cliente.ObtenerUsuarioAsync(Id, vida.Token);
+            if (respuesta.EsCorrecta)
+            {
+                usuario = respuesta.Valor;
+            }
+            else if (respuesta.CodigoError == CodigosError.UsuarioNoEncontrado)
+            {
+                // Mismo mensaje para un id de otra empresa y uno inexistente (EC-1, FR-003).
+                noEncontrado = true;
+            }
+            else
+            {
+                error = TextosErrores.ParaCodigo(respuesta.CodigoError);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = TextosErrores.SinRespuesta;
+        }
+    }
+
+    /// <summary>"Desactivar a {nombre}": abre el diálogo de confirmación; todavía no llama a la API (FR-032).</summary>
+    private void PedirConfirmacion()
+    {
+        error = null;
+        porConfirmar = usuario;
+    }
+
+    /// <summary>Cancelar o Escape: se cierra sin llamar a la API y el foco vuelve a "Desactivar" (FR-049).</summary>
+    private void CancelarDesactivacion()
+    {
+        porConfirmar = null;
+        devolverFoco = true;
+    }
+
+    private Task ConfirmarDesactivacionAsync(UsuarioResumen confirmado)
+    {
+        porConfirmar = null;
+        return CambiarEstadoAsync(desactivar: true);
+    }
+
+    /// <summary>
+    /// Igual que en el listado: envía la <c>version</c> como <c>If-Match</c> y solo muestra lo que el servidor confirma
+    /// (US2-7, FR-042, EC-8).
+    /// </summary>
+    private async Task CambiarEstadoAsync(bool desactivar)
+    {
+        if (usuario is null)
+        {
+            return;
+        }
+
+        var actual = usuario;
+        error = null;
+        try
+        {
+            var respuesta = desactivar
+                ? await Cliente.DesactivarUsuarioAsync(actual.Id, actual.Version, vida.Token)
+                : await Cliente.ActivarUsuarioAsync(actual.Id, actual.Version, vida.Token);
+
+            if (respuesta.EsCorrecta)
+            {
+                usuario = respuesta.Valor;
+                anuncio = desactivar ? $"{actual.NombreCompleto} fue desactivado." : $"{actual.NombreCompleto} fue activado.";
+                return;
+            }
+
+            if (respuesta.Problema?.Actual is { } vigente)
+            {
+                usuario = vigente;
+            }
+
+            MostrarFallo(TextosErrores.ParaCodigo(respuesta.CodigoError), desactivar);
+        }
+        catch (HttpRequestException)
+        {
+            MostrarFallo(TextosErrores.SinRespuesta, desactivar);
+        }
+    }
+
+    private void MostrarFallo(string texto, bool desactivar)
+    {
+        anuncio = null;
+        error = texto;
+        devolverFoco = desactivar;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (devolverFoco)
+        {
+            devolverFoco = false;
+            if (usuario?.Acciones.Desactivar == true)
+            {
+                await botonDesactivar.FocusAsync();
+            }
+        }
+    }
+
+    /// <summary>Texto del estado del contrato (FR-010). Un valor que el contrato no define se muestra tal cual.</summary>
+    private static string TextoEstado(string estado) => estado switch
+    {
+        "activo" => "Activo",
+        "inactivo" => "Inactivo",
+        _ => estado,
+    };
+
+    public void Dispose()
+    {
+        vida.Cancel();
+        vida.Dispose();
+    }
+}

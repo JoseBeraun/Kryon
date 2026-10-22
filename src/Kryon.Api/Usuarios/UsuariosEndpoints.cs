@@ -13,8 +13,9 @@ using Microsoft.Extensions.Options;
 namespace Kryon.Api.Usuarios;
 
 /// <summary>
-/// Endpoints de la Gestión de Usuarios (contracts/usuarios-api.openapi.yaml): <c>GET /api/usuarios</c> y
-/// <c>GET /api/usuarios/roles-asignables</c> (política <see cref="PoliticasUsuarios.Acceder"/>), y
+/// Endpoints de la Gestión de Usuarios (contracts/usuarios-api.openapi.yaml): <c>GET /api/usuarios</c>,
+/// <c>GET /api/usuarios/roles-asignables</c> y <c>GET /api/usuarios/{id}</c> (política
+/// <see cref="PoliticasUsuarios.Acceder"/>), y
 /// <c>POST /api/usuarios/{id}/desactivacion</c> y <c>/activacion</c> (políticas <see cref="PoliticasUsuarios.Desactivar"/>
 /// y <see cref="PoliticasUsuarios.Activar"/>, con <c>If-Match</c> obligatorio). La empresa sale siempre del contexto
 /// verificado: ningún parámetro la indica.
@@ -27,6 +28,9 @@ public static class UsuariosEndpoints
             .RequireAuthorization(PoliticasUsuarios.Acceder);
         endpoints.MapGet("/api/usuarios/roles-asignables", ListarRolesAsignablesAsync)
             .RequireAuthorization(PoliticasUsuarios.Acceder);
+        endpoints.MapGet("/api/usuarios/{id:guid}", ObtenerAsync)
+            .RequireAuthorization(PoliticasUsuarios.Acceder)
+            .RegistrarUsuarioNoAccesible(OperacionSolicitada.Consulta);
         endpoints.MapPost("/api/usuarios/{id:guid}/desactivacion", DesactivarAsync)
             .RequireAuthorization(PoliticasUsuarios.Desactivar)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Desactivacion);
@@ -79,6 +83,29 @@ public static class UsuariosEndpoints
             TamanoPagina = resultado.TamanoPagina,
             PuedeRegistrar = resultado.PuedeRegistrar,
         });
+    }
+
+    /// <summary>
+    /// <c>obtenerUsuario</c>: el usuario de la empresa actual con sus acciones y su <c>ETag</c> (US3-1). Un id de otra
+    /// empresa y uno inexistente responden el mismo 404 (FR-003), que audita el filtro
+    /// <see cref="RegistroUsuarioNoAccesible"/> con <c>Consulta</c> (FR-046).
+    /// </summary>
+    private static async Task<IResult> ObtenerAsync(
+        Guid id,
+        HttpContext http,
+        IConsultaUsuarios consulta,
+        IAuthorizationService autorizacion,
+        IContextoSolicitud contexto,
+        CancellationToken cancellationToken)
+    {
+        var detalle = await DetalleAsync(id, consulta, autorizacion, http.User, contexto, cancellationToken);
+        if (detalle is null)
+        {
+            return NoEncontrado();
+        }
+
+        http.Response.Headers.ETag = detalle.Version;
+        return TypedResults.Ok(detalle);
     }
 
     /// <summary><c>desactivarUsuario</c>: 200 con el usuario y su nuevo <c>ETag</c>.</summary>

@@ -192,13 +192,13 @@ fija ninguna regla sustituta.
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T069 [P] [US3] Pruebas de API de `GET /api/usuarios/{id}` en `tests/Kryon.Api.Tests/Usuarios/ObtenerUsuarioTests.cs`: 200 con `ETag` y `acciones` (US3-1); id de B y un id inventado → 404 con cuerpos **byte a byte iguales** (US3-3, FR-003); ambos casos dejan un registro `UsuarioNoAccesible` con la misma forma (actor, empresa del actor, id solicitado, `OperacionSolicitada = Consulta`, momento), sin ningún dato del recurso y sin empresa propietaria (FR-046).
-- [ ] T070 [P] [US3] Pruebas bUnit del detalle en `tests/Kryon.Web.Tests/Usuarios/DetalleUsuarioTests.cs`: campos de solo lectura, marca "Tú", acciones según las banderas, enlace "Volver al listado" que conserva la query string (US3-2), y "Usuario no encontrado" con enlace al listado.
+- [X] T069 [P] [US3] Pruebas de API de `GET /api/usuarios/{id}` en `tests/Kryon.Api.Tests/Usuarios/ObtenerUsuarioTests.cs`: 200 con `ETag` y `acciones` (US3-1); id de B y un id inventado → 404 con cuerpos **byte a byte iguales** (US3-3, FR-003); ambos casos dejan un registro `UsuarioNoAccesible` con la misma forma (actor, empresa del actor, id solicitado, `OperacionSolicitada = Consulta`, momento), sin ningún dato del recurso y sin empresa propietaria (FR-046).
+- [X] T070 [P] [US3] Pruebas bUnit del detalle en `tests/Kryon.Web.Tests/Usuarios/DetalleUsuarioTests.cs`: campos de solo lectura, marca "Tú", acciones según las banderas, enlace "Volver al listado" que conserva la query string (US3-2), y "Usuario no encontrado" con enlace al listado.
 
 ### Implementation for User Story 3
 
-- [ ] T071 [US3] Añadir `GET /api/usuarios/{id}` (política `Usuarios.Acceder`, `ETag` en la respuesta, filtro `RegistroUsuarioNoAccesible` de T031 con `OperacionSolicitada = Consulta`) en `src/Kryon.Api/Usuarios/UsuariosEndpoints.cs`.
-- [ ] T072 [US3] Crear la página `src/Kryon.Web/Usuarios/DetalleUsuario.razor` (ruta `/usuarios/{id}`) según `contracts/ui-usuarios.md` → *Detalle*, reutilizando el diálogo de desactivación de T067.
+- [X] T071 [US3] Añadir `GET /api/usuarios/{id}` (política `Usuarios.Acceder`, `ETag` en la respuesta, filtro `RegistroUsuarioNoAccesible` de T031 con `OperacionSolicitada = Consulta`) en `src/Kryon.Api/Usuarios/UsuariosEndpoints.cs`.
+- [X] T072 [US3] Crear la página `src/Kryon.Web/Usuarios/DetalleUsuario.razor` (ruta `/usuarios/{id}`) según `contracts/ui-usuarios.md` → *Detalle*, reutilizando el diálogo de desactivación de T067.
 
 **Checkpoint**: US1, US2 y US3 funcionan de forma independiente.
 

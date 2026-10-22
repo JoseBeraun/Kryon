@@ -50,7 +50,8 @@
                 {
                     <tr @key="usuario.Id">
                         <td class="texto-extenso">
-                            @usuario.NombreCompleto
+                            @* El espacio va dentro de la expresión: Razor quita el que hay entre el texto y la marca. *@
+                            @(usuario.EsCuentaPropia ? usuario.NombreCompleto + " " : usuario.NombreCompleto)
                             @if (usuario.EsCuentaPropia)
                             {
                                 <span class="cuenta-propia">Tú</span>
@@ -62,7 +63,7 @@
                         <td>
                             @if (usuario.Acciones.VerDetalle)
                             {
-                                <a href="@($"usuarios/{usuario.Id}")" aria-label="@($"Ver detalle de {usuario.NombreCompleto}")">Ver detalle</a>
+                                <a href="@($"usuarios/{usuario.Id}{ConsultaListado.Construir(Busqueda, RolId, Estado, Pagina, TamanoPagina)}")" aria-label="@($"Ver detalle de {usuario.NombreCompleto}")">Ver detalle</a>
                             }
                             @if (usuario.Acciones.Editar)
                             {
