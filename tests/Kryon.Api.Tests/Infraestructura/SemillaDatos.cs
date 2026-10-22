@@ -55,6 +55,13 @@ public static class SemillaDatos
     public static readonly RolSemilla RolSinGestionA =
         new(Guid.Parse("a1000000-0000-0000-0000-000000000003"), EmpresaA, "Sin gestión", []);
 
+    /// <summary>
+    /// Rol de A que ningún usuario sembrado tiene asignado: demuestra que los roles asignables son el catálogo de la
+    /// empresa y no solo los roles en uso.
+    /// </summary>
+    public static readonly RolSemilla RolSinUsuariosA =
+        new(Guid.Parse("a1000000-0000-0000-0000-000000000004"), EmpresaA, "Sin usuarios", []);
+
     /// <summary>Rol de B con todas las capacidades de gestión de usuarios (berta).</summary>
     public static readonly RolSemilla RolAdministracionB =
         new(Guid.Parse("b1000000-0000-0000-0000-000000000001"), EmpresaB, "Administración", TodasLasCapacidades);
@@ -83,7 +90,7 @@ public static class SemillaDatos
         new(Guid.Parse("b2000000-0000-0000-0000-000000000002"), "Ana Beta", "ana.beta", RolSinGestionB, EstadoUsuario.Activo);
 
     public static readonly IReadOnlyList<RolSemilla> Roles =
-        [RolAdministracionA, RolSinDesactivarA, RolSinGestionA, RolAdministracionB, RolSinGestionB];
+        [RolAdministracionA, RolSinDesactivarA, RolSinGestionA, RolSinUsuariosA, RolAdministracionB, RolSinGestionB];
 
     public static readonly IReadOnlyList<UsuarioSembrado> Usuarios = [Ana, Beto, Carla, Dario, Berta, AnaBeta];
 

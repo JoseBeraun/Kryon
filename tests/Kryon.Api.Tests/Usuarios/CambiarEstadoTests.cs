@@ -14,8 +14,13 @@ namespace Kryon.Api.Tests.Usuarios;
 /// <summary>
 /// Flujo de desactivación y activación (US2-2, US2-4, US2-6, SC-002, EC-2, FR-038): <c>POST
 /// /api/usuarios/{id}/desactivacion</c> y <c>/activacion</c> con <c>If-Match</c>, sobre la API real, SQL Server real y
-/// los datos semilla. Cada prueba deja a <c>carla</c> como la encontró (Activa).
+/// los datos semilla. Cada prueba deja a <c>carla</c> como la encontró (Activa), también si falla.
 /// </summary>
+/// <remarks>
+/// Las pruebas de la clase comparten el SQL Server de <see cref="KryonApiFactory"/>. La auditoría de cada prueba se mide
+/// desde una marca (<see cref="MarcaAuditoria"/>) tomada justo antes de su operación, no con ventanas de tiempo, para no
+/// contar los registros de otras pruebas de la clase.
+/// </remarks>
 public sealed class CambiarEstadoTests(KryonApiFactory fabrica) : IClassFixture<KryonApiFactory>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -26,30 +31,38 @@ public sealed class CambiarEstadoTests(KryonApiFactory fabrica) : IClassFixture<
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var carla = SemillaDatos.Carla;
-        var versionInicial = await VersionAsync(ana, carla.Id, ct);
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+        try
+        {
+            var versionInicial = await VersionAsync(ana, carla.Id, ct);
+            var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+            var marca = await MarcaAsync(ct);
 
-        var desactivacion = await CambiarAsync(ana, carla.Id, "desactivacion", versionInicial, ct);
+            var desactivacion = await CambiarAsync(ana, carla.Id, "desactivacion", versionInicial, ct);
 
-        Assert.Equal(HttpStatusCode.OK, desactivacion.StatusCode);
-        var detalle = await LeerAsync<DetalleUsuario>(desactivacion, ct);
-        Assert.Equal("inactivo", detalle.Estado);
-        var etagDesactivado = desactivacion.Headers.ETag?.ToString();
-        Assert.NotNull(etagDesactivado);
-        Assert.NotEqual(versionInicial, etagDesactivado);
-        Assert.Equal(etagDesactivado, detalle.Version);
+            Assert.Equal(HttpStatusCode.OK, desactivacion.StatusCode);
+            var detalle = await LeerAsync<DetalleUsuario>(desactivacion, ct);
+            Assert.Equal("inactivo", detalle.Estado);
+            var etagDesactivado = desactivacion.Headers.ETag?.ToString();
+            Assert.NotNull(etagDesactivado);
+            Assert.NotEqual(versionInicial, etagDesactivado);
+            Assert.Equal(etagDesactivado, detalle.Version);
 
-        var activacion = await CambiarAsync(ana, carla.Id, "activacion", etagDesactivado, ct);
+            var activacion = await CambiarAsync(ana, carla.Id, "activacion", etagDesactivado, ct);
 
-        Assert.Equal(HttpStatusCode.OK, activacion.StatusCode);
-        Assert.Equal("activo", (await LeerAsync<DetalleUsuario>(activacion, ct)).Estado);
-        Assert.NotEqual(etagDesactivado, activacion.Headers.ETag?.ToString());
+            Assert.Equal(HttpStatusCode.OK, activacion.StatusCode);
+            Assert.Equal("activo", (await LeerAsync<DetalleUsuario>(activacion, ct)).Estado);
+            Assert.NotEqual(etagDesactivado, activacion.Headers.ETag?.ToString());
 
-        var registros = await AuditoriaAsync(carla.Id, antes, ct);
-        Assert.Collection(
-            registros,
-            r => AssertRegistro(r, TipoOperacion.Desactivacion, carla.Id, antes),
-            r => AssertRegistro(r, TipoOperacion.Activacion, carla.Id, antes));
+            var registros = await AuditoriaAsync(carla.Id, marca, ct);
+            Assert.Collection(
+                registros,
+                r => AssertRegistro(r, TipoOperacion.Desactivacion, carla.Id, antes),
+                r => AssertRegistro(r, TipoOperacion.Activacion, carla.Id, antes));
+        }
+        finally
+        {
+            await RestaurarCarlaActivaAsync(ana);
+        }
     }
 
     [Theory]
@@ -59,15 +72,22 @@ public sealed class CambiarEstadoTests(KryonApiFactory fabrica) : IClassFixture<
     {
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+        try
+        {
+            var marca = await MarcaAsync(ct);
 
-        var respuesta = await ana.PostAsync($"/api/usuarios/{SemillaDatos.Carla.Id}/{operacion}", content: null, ct);
+            var respuesta = await ana.PostAsync($"/api/usuarios/{SemillaDatos.Carla.Id}/{operacion}", content: null, ct);
 
-        Assert.Equal(HttpStatusCode.PreconditionRequired, respuesta.StatusCode);
-        var problema = await LeerProblemaAsync(respuesta, ct);
-        Assert.Equal(428, problema.Status);
-        Assert.Equal(CodigosError.FaltaVersion, problema.Codigo);
-        Assert.Empty(await AuditoriaAsync(SemillaDatos.Carla.Id, antes, ct));
+            Assert.Equal(HttpStatusCode.PreconditionRequired, respuesta.StatusCode);
+            var problema = await LeerProblemaAsync(respuesta, ct);
+            Assert.Equal(428, problema.Status);
+            Assert.Equal(CodigosError.FaltaVersion, problema.Codigo);
+            Assert.Empty(await AuditoriaAsync(SemillaDatos.Carla.Id, marca, ct));
+        }
+        finally
+        {
+            await RestaurarCarlaActivaAsync(ana);
+        }
     }
 
     [Fact]
@@ -76,28 +96,51 @@ public sealed class CambiarEstadoTests(KryonApiFactory fabrica) : IClassFixture<
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var carla = SemillaDatos.Carla;
-        var versionObsoleta = await VersionAsync(ana, carla.Id, ct);
+        try
+        {
+            var versionObsoleta = await VersionAsync(ana, carla.Id, ct);
 
-        // Otra operación cambia a carla: su versión deja de ser la que tenía el cliente.
-        var desactivacion = await CambiarAsync(ana, carla.Id, "desactivacion", versionObsoleta, ct);
-        Assert.Equal(HttpStatusCode.OK, desactivacion.StatusCode);
-        var versionVigente = desactivacion.Headers.ETag!.ToString();
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-1);
+            // Otra operación cambia a carla: su versión deja de ser la que tenía el cliente.
+            var desactivacion = await CambiarAsync(ana, carla.Id, "desactivacion", versionObsoleta, ct);
+            Assert.Equal(HttpStatusCode.OK, desactivacion.StatusCode);
+            var versionVigente = desactivacion.Headers.ETag!.ToString();
 
-        var obsoleta = await CambiarAsync(ana, carla.Id, "activacion", versionObsoleta, ct);
+            // La marca se toma después de esa desactivación: solo cuenta lo que haga la petición obsoleta.
+            var marca = await MarcaAsync(ct);
 
-        Assert.Equal(HttpStatusCode.PreconditionFailed, obsoleta.StatusCode);
-        var problema = await LeerProblemaAsync(obsoleta, ct);
-        Assert.Equal(412, problema.Status);
-        Assert.Equal(CodigosError.UsuarioModificado, problema.Codigo);
-        Assert.NotNull(problema.Actual);
-        Assert.Equal(carla.Id, problema.Actual.Id);
-        Assert.Equal("inactivo", problema.Actual.Estado);
-        Assert.Equal(versionVigente, problema.Actual.Version);
-        Assert.Empty(await AuditoriaAsync(carla.Id, antes, ct));
+            var obsoleta = await CambiarAsync(ana, carla.Id, "activacion", versionObsoleta, ct);
 
-        // Se restaura el estado de la semilla con la versión vigente.
-        Assert.Equal(HttpStatusCode.OK, (await CambiarAsync(ana, carla.Id, "activacion", versionVigente, ct)).StatusCode);
+            Assert.Equal(HttpStatusCode.PreconditionFailed, obsoleta.StatusCode);
+            var problema = await LeerProblemaAsync(obsoleta, ct);
+            Assert.Equal(412, problema.Status);
+            Assert.Equal(CodigosError.UsuarioModificado, problema.Codigo);
+            Assert.NotNull(problema.Actual);
+            Assert.Equal(carla.Id, problema.Actual.Id);
+            Assert.Equal("inactivo", problema.Actual.Estado);
+            Assert.Equal(versionVigente, problema.Actual.Version);
+            Assert.Empty(await AuditoriaAsync(carla.Id, marca, ct));
+        }
+        finally
+        {
+            await RestaurarCarlaActivaAsync(ana);
+        }
+    }
+
+    /// <summary>Última marca de auditoría de la empresa A, antes de la operación que se prueba.</summary>
+    private Task<long> MarcaAsync(CancellationToken ct) => MarcaAuditoria.UltimoIdAsync(fabrica.CadenaConexion, SemillaDatos.EmpresaA, ct);
+
+    /// <summary>
+    /// Deja a carla Activa, como en la semilla, aunque la prueba haya fallado a medias: así ninguna otra prueba de la clase
+    /// hereda su estado. Usa la API con la versión vigente; si ya está Activa, no hace nada.
+    /// </summary>
+    private static async Task RestaurarCarlaActivaAsync(HttpClient cliente)
+    {
+        var detalle = await LeerAsync<DetalleUsuario>(await cliente.GetAsync($"/api/usuarios/{SemillaDatos.Carla.Id}", CancellationToken.None), CancellationToken.None);
+        if (detalle.Estado != "activo")
+        {
+            var activacion = await CambiarAsync(cliente, SemillaDatos.Carla.Id, "activacion", detalle.Version, CancellationToken.None);
+            Assert.Equal(HttpStatusCode.OK, activacion.StatusCode);
+        }
     }
 
     private static void AssertRegistro(RegistroAuditoria registro, TipoOperacion tipo, Guid afectado, DateTimeOffset desde)
@@ -134,8 +177,11 @@ public sealed class CambiarEstadoTests(KryonApiFactory fabrica) : IClassFixture<
         return await LeerAsync<Problema>(respuesta, ct);
     }
 
-    /// <summary>Registros de auditoría de la empresa A sobre <paramref name="afectado"/>, por SQL directo y en orden.</summary>
-    private async Task<List<RegistroAuditoria>> AuditoriaAsync(Guid afectado, DateTimeOffset desde, CancellationToken ct)
+    /// <summary>
+    /// Registros de auditoría de la empresa A sobre <paramref name="afectado"/> posteriores a la marca
+    /// <paramref name="despuesDeId"/>, por SQL directo y en orden.
+    /// </summary>
+    private async Task<List<RegistroAuditoria>> AuditoriaAsync(Guid afectado, long despuesDeId, CancellationToken ct)
     {
         await using var conexion = new SqlConnection(new SqlConnectionStringBuilder(fabrica.CadenaConexion) { Pooling = false }.ConnectionString);
         await conexion.OpenAsync(ct);
@@ -151,11 +197,11 @@ public sealed class CambiarEstadoTests(KryonApiFactory fabrica) : IClassFixture<
         consulta.CommandText = """
             SELECT TipoOperacion, ActorUsuarioId, EmpresaId, UsuarioAfectadoId, OcurridoEn, OperacionSolicitada
             FROM dbo.AuditoriaUsuarios
-            WHERE UsuarioAfectadoId = @Afectado AND OcurridoEn >= @Desde
+            WHERE UsuarioAfectadoId = @Afectado AND Id > @DespuesDeId
             ORDER BY Id;
             """;
         consulta.Parameters.Add("@Afectado", SqlDbType.UniqueIdentifier).Value = afectado;
-        consulta.Parameters.Add("@Desde", SqlDbType.DateTimeOffset).Value = desde;
+        consulta.Parameters.Add("@DespuesDeId", SqlDbType.BigInt).Value = despuesDeId;
         await using var lector = await consulta.ExecuteReaderAsync(ct);
 
         var registros = new List<RegistroAuditoria>();

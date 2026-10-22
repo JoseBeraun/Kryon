@@ -34,12 +34,12 @@ public sealed class RolesAsignablesTests(KryonApiFactory fabrica) : IClassFixtur
     [Fact]
     public async Task ComoAna_IncluyeUnRolDeASinUsuariosAsignados()
     {
-        // Ningún usuario sembrado tiene "Sin desactivar": la lista es el catálogo de la empresa, no los roles en uso.
-        Assert.DoesNotContain(SemillaDatos.Usuarios, u => u.Rol.Id == SemillaDatos.RolSinDesactivarA.Id);
+        // Ningún usuario sembrado tiene "Sin usuarios": la lista es el catálogo de la empresa, no los roles en uso.
+        Assert.DoesNotContain(SemillaDatos.Usuarios, u => u.Rol.Id == SemillaDatos.RolSinUsuariosA.Id);
 
         var (_, cuerpo) = await ObtenerComoAsync(SemillaDatos.Ana);
 
-        Assert.Contains(Deserializar<List<RolResumen>>(cuerpo), r => r.Id == SemillaDatos.RolSinDesactivarA.Id);
+        Assert.Contains(Deserializar<List<RolResumen>>(cuerpo), r => r.Id == SemillaDatos.RolSinUsuariosA.Id);
     }
 
     [Fact]

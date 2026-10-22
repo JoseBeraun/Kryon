@@ -14,12 +14,14 @@ namespace Kryon.Api.Tests.Usuarios;
 
 /// <summary>
 /// Flujo de <c>PUT /api/usuarios/{id}</c> (US4-3, US4-7, US4-10, US4-14, SC-002, SC-009, FR-038, FR-044) sobre la API
-/// real, SQL Server real y los datos semilla. Cada prueba deja los datos como los encontró.
+/// real, SQL Server real y los datos semilla. Cada prueba deja los datos como los encontró, también si falla.
 /// </summary>
 /// <remarks>
 /// <c>CambiosJson</c> sigue el formato de T027 (<c>[{"campo":…,"anterior":…,"nuevo":…}]</c>) con los nombres de campo
 /// del contrato. Las claves de <c>errors</c> son los nombres de los campos del cuerpo, que la interfaz usa para mostrar
-/// cada error junto a su campo (FR-025).
+/// cada error junto a su campo (FR-025). Las pruebas de la clase comparten el SQL Server de <see cref="KryonApiFactory"/>:
+/// la auditoría de cada prueba se mide desde una marca (<see cref="MarcaAuditoria"/>) tomada justo antes de su operación,
+/// no con ventanas de tiempo, para no contar los registros de otras pruebas de la clase.
 /// </remarks>
 public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixture<KryonApiFactory>
 {
@@ -31,29 +33,35 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var carla = SemillaDatos.Carla;
-        var (version, _) = await LeerAsync(ana, carla.Id, ct);
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+        try
+        {
+            var (version, _) = await LeerAsync(ana, carla.Id, ct);
+            var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+            var marca = await MarcaAsync(ct);
 
-        var respuesta = await EditarAsync(ana, carla.Id, "Carla Ruiz", carla.Rol.Id, version, ct);
+            var respuesta = await EditarAsync(ana, carla.Id, "Carla Ruiz", carla.Rol.Id, version, ct);
 
-        Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var detalle = (await respuesta.Content.ReadFromJsonAsync<DetalleUsuario>(Json, ct))!;
-        Assert.Equal("Carla Ruiz", detalle.NombreCompleto);
-        Assert.Equal(carla.Rol.Id, detalle.Rol?.Id);
-        Assert.Equal(detalle.Version, respuesta.Headers.ETag?.ToString());
-        Assert.NotEqual(version, detalle.Version);
+            Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
+            var detalle = (await respuesta.Content.ReadFromJsonAsync<DetalleUsuario>(Json, ct))!;
+            Assert.Equal("Carla Ruiz", detalle.NombreCompleto);
+            Assert.Equal(carla.Rol.Id, detalle.Rol?.Id);
+            Assert.Equal(detalle.Version, respuesta.Headers.ETag?.ToString());
+            Assert.NotEqual(version, detalle.Version);
 
-        var registro = Assert.Single(await AuditoriaAsync(carla.Id, antes, ct));
-        Assert.Equal(TipoOperacion.Modificacion, registro.Tipo);
-        Assert.Equal(SemillaDatos.Ana.Id, registro.Actor);
-        Assert.Equal(SemillaDatos.EmpresaA, registro.EmpresaId);
-        Assert.InRange(registro.OcurridoEn, antes, DateTimeOffset.UtcNow.AddSeconds(5));
-        var cambio = Assert.Single(Cambios(registro));
-        Assert.Equal("nombreCompleto", cambio.GetProperty("campo").GetString());
-        Assert.Equal(carla.NombreCompleto, cambio.GetProperty("anterior").GetString());
-        Assert.Equal("Carla Ruiz", cambio.GetProperty("nuevo").GetString());
-
-        Assert.Equal(HttpStatusCode.OK, (await EditarAsync(ana, carla.Id, carla.NombreCompleto, carla.Rol.Id, detalle.Version, ct)).StatusCode);
+            var registro = Assert.Single(await AuditoriaAsync(carla.Id, marca, ct));
+            Assert.Equal(TipoOperacion.Modificacion, registro.Tipo);
+            Assert.Equal(SemillaDatos.Ana.Id, registro.Actor);
+            Assert.Equal(SemillaDatos.EmpresaA, registro.EmpresaId);
+            Assert.InRange(registro.OcurridoEn, antes, DateTimeOffset.UtcNow.AddSeconds(5));
+            var cambio = Assert.Single(Cambios(registro));
+            Assert.Equal("nombreCompleto", cambio.GetProperty("campo").GetString());
+            Assert.Equal(carla.NombreCompleto, cambio.GetProperty("anterior").GetString());
+            Assert.Equal("Carla Ruiz", cambio.GetProperty("nuevo").GetString());
+        }
+        finally
+        {
+            await RestaurarAsync(ana, carla);
+        }
     }
 
     [Fact]
@@ -62,19 +70,24 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var beto = SemillaDatos.Beto;
-        var (version, _) = await LeerAsync(ana, beto.Id, ct);
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+        try
+        {
+            var (version, _) = await LeerAsync(ana, beto.Id, ct);
+            var marca = await MarcaAsync(ct);
 
-        // beto pasa a otro rol de administración: ana sigue siendo administradora, así que se admite.
-        var respuesta = await EditarAsync(ana, beto.Id, beto.NombreCompleto, SemillaDatos.RolAdministracionA.Id, version, ct);
+            // beto pasa a otro rol de administración: ana sigue siendo administradora, así que se admite.
+            var respuesta = await EditarAsync(ana, beto.Id, beto.NombreCompleto, SemillaDatos.RolAdministracionA.Id, version, ct);
 
-        Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
-        var detalle = (await respuesta.Content.ReadFromJsonAsync<DetalleUsuario>(Json, ct))!;
-        Assert.Equal(SemillaDatos.RolAdministracionA.Id, detalle.Rol?.Id);
-        var cambio = Assert.Single(Cambios(Assert.Single(await AuditoriaAsync(beto.Id, antes, ct))));
-        Assert.Equal("rolId", cambio.GetProperty("campo").GetString());
-
-        Assert.Equal(HttpStatusCode.OK, (await EditarAsync(ana, beto.Id, beto.NombreCompleto, beto.Rol.Id, detalle.Version, ct)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, respuesta.StatusCode);
+            var detalle = (await respuesta.Content.ReadFromJsonAsync<DetalleUsuario>(Json, ct))!;
+            Assert.Equal(SemillaDatos.RolAdministracionA.Id, detalle.Rol?.Id);
+            var cambio = Assert.Single(Cambios(Assert.Single(await AuditoriaAsync(beto.Id, marca, ct))));
+            Assert.Equal("rolId", cambio.GetProperty("campo").GetString());
+        }
+        finally
+        {
+            await RestaurarAsync(ana, beto);
+        }
     }
 
     [Theory]
@@ -85,19 +98,26 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var carla = SemillaDatos.Carla;
-        var (version, _) = await LeerAsync(ana, carla.Id, ct);
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-5);
+        try
+        {
+            var (version, _) = await LeerAsync(ana, carla.Id, ct);
+            var marca = await MarcaAsync(ct);
 
-        var respuesta = await EditarAsync(ana, carla.Id, nombre, carla.Rol.Id, version, ct);
+            var respuesta = await EditarAsync(ana, carla.Id, nombre, carla.Rol.Id, version, ct);
 
-        Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
-        var problema = await ProblemaAsync(respuesta, ct);
-        Assert.Equal(CodigosError.Validacion, problema.Codigo);
-        Assert.NotNull(problema.Errors);
-        Assert.Contains(problema.Errors.Keys, k => string.Equals(k, "nombreCompleto", StringComparison.OrdinalIgnoreCase));
-        Assert.All(problema.Errors.Values, mensajes => Assert.NotEmpty(mensajes));
-        Assert.Equal((version, carla.NombreCompleto), await LeerAsync(ana, carla.Id, ct));
-        Assert.Empty(await AuditoriaAsync(carla.Id, antes, ct));
+            Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
+            var problema = await ProblemaAsync(respuesta, ct);
+            Assert.Equal(CodigosError.Validacion, problema.Codigo);
+            Assert.NotNull(problema.Errors);
+            Assert.Contains(problema.Errors.Keys, k => string.Equals(k, "nombreCompleto", StringComparison.OrdinalIgnoreCase));
+            Assert.All(problema.Errors.Values, mensajes => Assert.NotEmpty(mensajes));
+            Assert.Equal((version, carla.NombreCompleto), await LeerAsync(ana, carla.Id, ct));
+            Assert.Empty(await AuditoriaAsync(carla.Id, marca, ct));
+        }
+        finally
+        {
+            await RestaurarAsync(ana, carla);
+        }
     }
 
     [Fact]
@@ -106,26 +126,33 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var carla = SemillaDatos.Carla;
-        var (obsoleta, _) = await LeerAsync(ana, carla.Id, ct);
+        try
+        {
+            var (obsoleta, _) = await LeerAsync(ana, carla.Id, ct);
 
-        // Otra sesión guarda antes: la versión del cliente queda obsoleta.
-        var primera = await EditarAsync(ana, carla.Id, "Carla Primera", carla.Rol.Id, obsoleta, ct);
-        Assert.Equal(HttpStatusCode.OK, primera.StatusCode);
-        var vigente = primera.Headers.ETag!.ToString();
-        var antes = DateTimeOffset.UtcNow.AddSeconds(-1);
+            // Otra sesión guarda antes: la versión del cliente queda obsoleta.
+            var primera = await EditarAsync(ana, carla.Id, "Carla Primera", carla.Rol.Id, obsoleta, ct);
+            Assert.Equal(HttpStatusCode.OK, primera.StatusCode);
+            var vigente = primera.Headers.ETag!.ToString();
 
-        var segunda = await EditarAsync(ana, carla.Id, "Carla Segunda", carla.Rol.Id, obsoleta, ct);
+            // La marca se toma después de la primera edición: solo cuenta lo que haga la petición obsoleta.
+            var marca = await MarcaAsync(ct);
 
-        Assert.Equal(HttpStatusCode.PreconditionFailed, segunda.StatusCode);
-        var problema = await ProblemaAsync(segunda, ct);
-        Assert.Equal(CodigosError.UsuarioModificado, problema.Codigo);
-        Assert.NotNull(problema.Actual);
-        Assert.Equal("Carla Primera", problema.Actual.NombreCompleto);
-        Assert.Equal(vigente, problema.Actual.Version);
-        Assert.Equal((vigente, "Carla Primera"), await LeerAsync(ana, carla.Id, ct));
-        Assert.Empty(await AuditoriaAsync(carla.Id, antes, ct));
+            var segunda = await EditarAsync(ana, carla.Id, "Carla Segunda", carla.Rol.Id, obsoleta, ct);
 
-        Assert.Equal(HttpStatusCode.OK, (await EditarAsync(ana, carla.Id, carla.NombreCompleto, carla.Rol.Id, vigente, ct)).StatusCode);
+            Assert.Equal(HttpStatusCode.PreconditionFailed, segunda.StatusCode);
+            var problema = await ProblemaAsync(segunda, ct);
+            Assert.Equal(CodigosError.UsuarioModificado, problema.Codigo);
+            Assert.NotNull(problema.Actual);
+            Assert.Equal("Carla Primera", problema.Actual.NombreCompleto);
+            Assert.Equal(vigente, problema.Actual.Version);
+            Assert.Equal((vigente, "Carla Primera"), await LeerAsync(ana, carla.Id, ct));
+            Assert.Empty(await AuditoriaAsync(carla.Id, marca, ct));
+        }
+        finally
+        {
+            await RestaurarAsync(ana, carla);
+        }
     }
 
     [Fact]
@@ -134,12 +161,36 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         var ct = TestContext.Current.CancellationToken;
         var ana = fabrica.ClienteComo(SemillaDatos.Ana.Identidad);
         var carla = SemillaDatos.Carla;
+        try
+        {
+            var respuesta = await EditarAsync(ana, carla.Id, "Carla Ruiz", carla.Rol.Id, version: null, ct);
 
-        var respuesta = await EditarAsync(ana, carla.Id, "Carla Ruiz", carla.Rol.Id, version: null, ct);
+            Assert.Equal(HttpStatusCode.PreconditionRequired, respuesta.StatusCode);
+            Assert.Equal(CodigosError.FaltaVersion, (await ProblemaAsync(respuesta, ct)).Codigo);
+            Assert.Equal(carla.NombreCompleto, (await LeerAsync(ana, carla.Id, ct)).Nombre);
+        }
+        finally
+        {
+            await RestaurarAsync(ana, carla);
+        }
+    }
 
-        Assert.Equal(HttpStatusCode.PreconditionRequired, respuesta.StatusCode);
-        Assert.Equal(CodigosError.FaltaVersion, (await ProblemaAsync(respuesta, ct)).Codigo);
-        Assert.Equal(carla.NombreCompleto, (await LeerAsync(ana, carla.Id, ct)).Nombre);
+    /// <summary>Última marca de auditoría de la empresa A, antes de la operación que se prueba.</summary>
+    private Task<long> MarcaAsync(CancellationToken ct) => MarcaAuditoria.UltimoIdAsync(fabrica.CadenaConexion, SemillaDatos.EmpresaA, ct);
+
+    /// <summary>
+    /// Devuelve a <paramref name="usuario"/> el nombre y el rol de la semilla aunque la prueba haya fallado a medias, para
+    /// que ninguna otra prueba de la clase herede sus cambios. Usa la API con la versión vigente; si ya coinciden, no hace
+    /// nada.
+    /// </summary>
+    private static async Task RestaurarAsync(HttpClient cliente, UsuarioSembrado usuario)
+    {
+        var detalle = (await cliente.GetFromJsonAsync<DetalleUsuario>($"/api/usuarios/{usuario.Id}", Json, CancellationToken.None))!;
+        if (detalle.NombreCompleto != usuario.NombreCompleto || detalle.Rol?.Id != usuario.Rol.Id)
+        {
+            var restauracion = await EditarAsync(cliente, usuario.Id, usuario.NombreCompleto, usuario.Rol.Id, detalle.Version, CancellationToken.None);
+            Assert.Equal(HttpStatusCode.OK, restauracion.StatusCode);
+        }
     }
 
     private static async Task<(string Version, string Nombre)> LeerAsync(HttpClient cliente, Guid id, CancellationToken ct)
@@ -175,8 +226,11 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         return [.. documento.RootElement.EnumerateArray().Select(e => e.Clone())];
     }
 
-    /// <summary>Registros de auditoría de la empresa A sobre <paramref name="afectado"/>, por SQL directo y en orden.</summary>
-    private async Task<List<RegistroAuditoria>> AuditoriaAsync(Guid afectado, DateTimeOffset desde, CancellationToken ct)
+    /// <summary>
+    /// Registros de auditoría de la empresa A sobre <paramref name="afectado"/> posteriores a la marca
+    /// <paramref name="despuesDeId"/>, por SQL directo y en orden.
+    /// </summary>
+    private async Task<List<RegistroAuditoria>> AuditoriaAsync(Guid afectado, long despuesDeId, CancellationToken ct)
     {
         await using var conexion = new SqlConnection(new SqlConnectionStringBuilder(fabrica.CadenaConexion) { Pooling = false }.ConnectionString);
         await conexion.OpenAsync(ct);
@@ -192,11 +246,11 @@ public sealed class EditarUsuarioApiTests(KryonApiFactory fabrica) : IClassFixtu
         consulta.CommandText = """
             SELECT TipoOperacion, ActorUsuarioId, EmpresaId, OcurridoEn, CambiosJson
             FROM dbo.AuditoriaUsuarios
-            WHERE UsuarioAfectadoId = @Afectado AND OcurridoEn >= @Desde
+            WHERE UsuarioAfectadoId = @Afectado AND Id > @DespuesDeId
             ORDER BY Id;
             """;
         consulta.Parameters.Add("@Afectado", SqlDbType.UniqueIdentifier).Value = afectado;
-        consulta.Parameters.Add("@Desde", SqlDbType.DateTimeOffset).Value = desde;
+        consulta.Parameters.Add("@DespuesDeId", SqlDbType.BigInt).Value = despuesDeId;
         await using var lector = await consulta.ExecuteReaderAsync(ct);
 
         var registros = new List<RegistroAuditoria>();
