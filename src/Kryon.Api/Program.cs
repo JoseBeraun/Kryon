@@ -3,6 +3,7 @@ using Kryon.Api.Seguridad;
 using Kryon.Api.Usuarios;
 using Kryon.Core.Seguridad;
 using Kryon.Core.Usuarios;
+using Kryon.Core.Usuarios.Eventos;
 using Kryon.Infrastructure.Persistencia;
 using Kryon.Infrastructure.Usuarios;
 
@@ -81,8 +82,18 @@ builder.Services.AddScoped<IRegistroAuditoria, RegistroAuditoria>();
 builder.Services.AddScoped<IConsultaUsuarios, ConsultaUsuarios>();
 builder.Services.AddScoped<IBloqueoAdministradoresEmpresa, BloqueoAdministradoresEmpresa>();
 
+// Quién es administrador lo define la misma capacidad que la política Usuarios.Acceder (T008, FR-036).
+builder.Services.AddScoped<IRepositorioUsuarios>(proveedor => new RepositorioUsuarios(
+    proveedor.GetRequiredService<KryonDbContext>(),
+    builder.Configuration.GetSection(PoliticasUsuarios.SeccionPermisos)[PoliticasUsuarios.Acceder]));
+
+// UsuarioDesactivado se publica sin suscriptores en esta feature (DEP-1).
+builder.Services.AddSingleton<IPublicadorEventos, PublicadorEventosSinSuscriptores>();
+builder.Services.AddSingleton(TimeProvider.System);
+
 // Casos de uso de Core: por solicitud, como el contexto y la consulta de los que dependen.
 builder.Services.AddScoped<ListarUsuarios>();
+builder.Services.AddScoped<CambiarEstadoUsuario>();
 
 // Excepciones no controladas: 500 genérico del contrato en todos los entornos (FR-041, SC-004).
 // UseExceptionHandler() sin parámetros exige un IProblemDetailsService; el manejador responde antes que él.

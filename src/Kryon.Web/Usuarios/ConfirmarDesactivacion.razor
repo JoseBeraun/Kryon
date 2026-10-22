@@ -1,0 +1,79 @@
+@using Kryon.Contracts.Usuarios
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@*
+    Diálogo de confirmación de la desactivación (contracts/ui-usuarios.md → Diálogo de confirmación de desactivación;
+    FR-032, FR-049). Solo existe mientras hay un usuario por confirmar. Se abre como modal; el foco inicial va a
+    "Cancelar" (la opción segura) y Escape equivale a Cancelar. Devolver el foco al botón de origen le corresponde a quien
+    lo abrió, que es quien conoce ese botón. Cancelar no llama a la API.
+*@
+
+@if (Usuario is not null)
+{
+    <dialog @ref="dialogo" aria-labelledby="titulo-desactivacion" aria-describedby="texto-desactivacion" @oncancel="CancelarAsync">
+        <h2 id="titulo-desactivacion">Desactivar a @Usuario.NombreCompleto</h2>
+        <p id="texto-desactivacion">@Usuario.NombreCompleto dejará de tener acceso a Kryon. Puedes volver a activarlo más adelante.</p>
+        <button type="button" @onclick="ConfirmarAsync">Desactivar</button>
+        <button type="button" autofocus @onclick="CancelarAsync">Cancelar</button>
+    </dialog>
+}
+
+@code {
+    /// <summary>Usuario que se va a desactivar; null mientras el diálogo está cerrado.</summary>
+    [Parameter]
+    public UsuarioResumen? Usuario { get; set; }
+
+    /// <summary>Se pulsó "Desactivar".</summary>
+    [Parameter]
+    public EventCallback<UsuarioResumen> AlConfirmar { get; set; }
+
+    /// <summary>Se pulsó "Cancelar" o Escape.</summary>
+    [Parameter]
+    public EventCallback AlCancelar { get; set; }
+
+    private ElementReference dialogo;
+    private IJSObjectReference? modulo;
+    private Guid? abiertoPara;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Se abre como modal una sola vez por usuario; cerrarlo es quitarlo del DOM.
+        if (Usuario is null)
+        {
+            abiertoPara = null;
+            return;
+        }
+
+        if (abiertoPara == Usuario.Id)
+        {
+            return;
+        }
+
+        abiertoPara = Usuario.Id;
+        modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Usuarios/ConfirmarDesactivacion.razor.js");
+        if (modulo is not null)
+        {
+            await modulo.InvokeVoidAsync("abrirModal", dialogo);
+        }
+    }
+
+    private Task ConfirmarAsync() => AlConfirmar.InvokeAsync(Usuario);
+
+    private Task CancelarAsync() => AlCancelar.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (modulo is not null)
+        {
+            try
+            {
+                await modulo.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // La página ya no existe: no hay nada que liberar.
+            }
+        }
+    }
+}

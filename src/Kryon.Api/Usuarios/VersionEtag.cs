@@ -24,4 +24,22 @@ public static class VersionEtag
 
         return $"\"{Convert.ToBase64String(version)}\"";
     }
+
+    /// <summary>
+    /// Versión recibida en <c>If-Match</c>: la inversa de <see cref="Desde"/>. Un valor con otro formato (débil, varios
+    /// ETag, <c>*</c> o Base64 inválido) no puede coincidir con ninguna versión: devuelve una versión vacía, que el caso
+    /// de uso rechaza como <c>usuario-modificado</c>.
+    /// </summary>
+    /// <param name="ifMatch">Valor del encabezado, ya comprobado que existe.</param>
+    public static byte[] Leer(string ifMatch)
+    {
+        var valor = ifMatch.Trim();
+        if (valor.Length < 3 || valor[0] != '"' || valor[^1] != '"')
+        {
+            return [];
+        }
+
+        var bytes = new byte[valor.Length];
+        return Convert.TryFromBase64String(valor[1..^1], bytes, out var escritos) ? bytes[..escritos] : [];
+    }
 }

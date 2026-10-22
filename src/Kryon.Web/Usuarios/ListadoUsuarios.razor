@@ -68,14 +68,14 @@
                             {
                                 <a href="@($"usuarios/{usuario.Id}/editar")" aria-label="@($"Editar a {usuario.NombreCompleto}")">Editar</a>
                             }
-                            @* Activar y desactivar se conectan con la API en US2 (T057 y siguientes). *@
                             @if (usuario.Acciones.Activar)
                             {
-                                <button type="button" aria-label="@($"Activar a {usuario.NombreCompleto}")">Activar</button>
+                                @* Activar no pide confirmación (FR-032). *@
+                                <button type="button" aria-label="@($"Activar a {usuario.NombreCompleto}")" @onclick="() => ActivarAsync(usuario)">Activar</button>
                             }
                             @if (usuario.Acciones.Desactivar)
                             {
-                                <button type="button" aria-label="@($"Desactivar a {usuario.NombreCompleto}")">Desactivar</button>
+                                <button type="button" aria-label="@($"Desactivar a {usuario.NombreCompleto}")" @ref="botonesDesactivar[usuario.Id]" @onclick="() => PedirConfirmacion(usuario)">Desactivar</button>
                             }
                         </td>
                     </tr>
@@ -86,6 +86,8 @@
         <PaginacionUsuarios Pagina="@resultado.Pagina" TamanoPagina="@resultado.TamanoPagina" Total="@resultado.Total" AlCambiarPagina="IrAPagina" />
     }
 }
+
+<ConfirmarDesactivacion Usuario="@porConfirmar" AlConfirmar="ConfirmarDesactivacionAsync" AlCancelar="CancelarDesactivacion" />
 
 @code {
     /// <summary>Búsqueda parcial (parámetro <c>busqueda</c> del contrato).</summary>
@@ -110,6 +112,12 @@
     private string? error;
     private string? criteriosCargados;
     private CancellationTokenSource? carga;
+
+    // Desactivar y activar (US2). Las operaciones se cancelan si se sale de la página.
+    private readonly CancellationTokenSource vida = new();
+    private readonly Dictionary<Guid, ElementReference> botonesDesactivar = [];
+    private UsuarioResumen? porConfirmar;
+    private Guid? focoPendiente;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -179,6 +187,95 @@
 
     private void IrANuevoUsuario() => Navegacion.NavigateTo("usuarios/nuevo");
 
+    /// <summary>"Desactivar a {nombre}": abre el diálogo de confirmación; todavía no llama a la API (FR-032, SC-007).</summary>
+    private void PedirConfirmacion(UsuarioResumen usuario)
+    {
+        error = null;
+        porConfirmar = usuario;
+    }
+
+    /// <summary>Cancelar o Escape: se cierra el diálogo sin llamar a la API y el foco vuelve al botón de origen (FR-049).</summary>
+    private void CancelarDesactivacion()
+    {
+        focoPendiente = porConfirmar?.Id;
+        porConfirmar = null;
+    }
+
+    private Task ConfirmarDesactivacionAsync(UsuarioResumen usuario)
+    {
+        porConfirmar = null;
+        return CambiarEstadoAsync(usuario, desactivar: true);
+    }
+
+    private Task ActivarAsync(UsuarioResumen usuario) => CambiarEstadoAsync(usuario, desactivar: false);
+
+    /// <summary>
+    /// Envía la operación con la <c>version</c> de la fila como <c>If-Match</c> y solo muestra lo que el servidor confirma:
+    /// al terminar bien, la fila pasa a ser la respuesta (estado, versión y acciones) y se anuncia el éxito; ante un
+    /// rechazo se muestra el texto de su código y, si la API devuelve <c>actual</c> (412), el estado real (US2-7);
+    /// sin respuesta, la fila se queda como estaba (FR-042, EC-8).
+    /// </summary>
+    private async Task CambiarEstadoAsync(UsuarioResumen usuario, bool desactivar)
+    {
+        error = null;
+        try
+        {
+            var respuesta = desactivar
+                ? await Cliente.DesactivarUsuarioAsync(usuario.Id, usuario.Version, vida.Token)
+                : await Cliente.ActivarUsuarioAsync(usuario.Id, usuario.Version, vida.Token);
+
+            if (respuesta.EsCorrecta)
+            {
+                ReemplazarFila(respuesta.Valor!);
+                anuncio = desactivar ? $"{usuario.NombreCompleto} fue desactivado." : $"{usuario.NombreCompleto} fue activado.";
+                return;
+            }
+
+            if (respuesta.Problema?.Actual is { } actual)
+            {
+                ReemplazarFila(actual);
+            }
+
+            MostrarFallo(TextosErrores.ParaCodigo(respuesta.CodigoError), usuario, desactivar);
+        }
+        catch (HttpRequestException)
+        {
+            MostrarFallo(TextosErrores.SinRespuesta, usuario, desactivar);
+        }
+    }
+
+    private void MostrarFallo(string texto, UsuarioResumen usuario, bool desactivar)
+    {
+        anuncio = null;
+        error = texto;
+        if (desactivar)
+        {
+            focoPendiente = usuario.Id;
+        }
+    }
+
+    private void ReemplazarFila(UsuarioResumen vigente)
+    {
+        if (resultado is not null)
+        {
+            resultado = resultado with { Elementos = [.. resultado.Elementos.Select(u => u.Id == vigente.Id ? vigente : u)] };
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // El foco vuelve al botón "Desactivar a {nombre}" que abrió el diálogo, si sigue en la fila (FR-049).
+        if (focoPendiente is { } id)
+        {
+            focoPendiente = null;
+            var sigue = resultado?.Elementos.Any(u => u.Id == id && u.Acciones.Desactivar) == true;
+            if (sigue && botonesDesactivar.TryGetValue(id, out var boton))
+            {
+                await boton.FocusAsync();
+            }
+        }
+    }
+
     /// <summary>Texto del estado del contrato (FR-010). Un valor que el contrato no define se muestra tal cual.</summary>
     private static string TextoEstado(string estado) => estado switch
     {
@@ -191,5 +288,7 @@
     {
         carga?.Cancel();
         carga?.Dispose();
+        vida.Cancel();
+        vida.Dispose();
     }
 }

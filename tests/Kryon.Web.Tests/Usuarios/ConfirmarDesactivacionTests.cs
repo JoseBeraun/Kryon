@@ -76,14 +76,22 @@ public sealed class ConfirmarDesactivacionTests : IAsyncDisposable
     public void Cancelar_CierraSinLlamarALaApi_YDevuelveElFocoAlBotonDeOrigen()
     {
         var corte = RenderizarListado();
-        var origen = Pulsar(corte, "Desactivar a Bruno Díaz");
+
+        // bUnit 2.11 solo escribe el id de la referencia (blazor:elementReference) en el primer renderizado del elemento:
+        // en los siguientes lo deja vacío aunque la referencia no cambie. Por eso se lee al pulsar, antes de que abrir el
+        // diálogo vuelva a renderizar el listado.
+        var origen = Assert.Single(Controles(corte.Find("table")), c => NombreAccesible(c) == "Desactivar a Bruno Díaz");
+        var referenciaOrigen = origen.GetAttribute("blazor:elementReference");
+        Assert.False(string.IsNullOrEmpty(referenciaOrigen), "El botón \"Desactivar a Bruno Díaz\" no tiene una referencia para recibir el foco.");
+        origen.Click();
 
         var cancelar = Assert.Single(Controles(DialogoAbierto(corte, Bruno)), c => NombreAccesible(c) == "Cancelar");
         cancelar.Click();
 
         corte.WaitForAssertion(() => Assert.Null(Dialogo(corte, Bruno)));
         Assert.DoesNotContain(contexto.Http.Solicitudes, s => s.Solicitud.Method == HttpMethod.Post);
-        corte.WaitForAssertion(() => Assert.True(FocoEn(Fila(corte, Bruno).QuerySelectorAll("button, a").Single(c => NombreAccesible(c) == NombreAccesible(origen))),
+        corte.WaitForAssertion(() => Assert.True(
+            contexto.JSInterop.Invocations[FuncionFoco].Any(l => l.Arguments[0] is ElementReference r && r.Id == referenciaOrigen),
             "El foco no vuelve al botón \"Desactivar a Bruno Díaz\"."));
     }
 
