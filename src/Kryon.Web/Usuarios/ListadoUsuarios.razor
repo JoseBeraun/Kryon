@@ -138,7 +138,16 @@
 
         var esCambio = criteriosCargados is not null;
         criteriosCargados = criterios;
+        await CargarAsync(anunciarResultados: esCambio);
+    }
 
+    /// <summary>
+    /// Pide a la API la página de la query string actual (búsqueda, filtros, página y tamaño). Ante cualquier rechazo o
+    /// sin respuesta no conserva datos anteriores (FR-005, FR-042).
+    /// </summary>
+    /// <param name="anunciarResultados">Anunciar "N usuarios encontrados" (cambió la búsqueda, los filtros o la página).</param>
+    private async Task CargarAsync(bool anunciarResultados)
+    {
         carga?.Cancel();
         carga?.Dispose();
         carga = new CancellationTokenSource();
@@ -159,7 +168,7 @@
             error = respuesta.EsCorrecta ? null : TextosErrores.ParaCodigo(respuesta.CodigoError);
 
             // El anuncio se hace cuando cambian la búsqueda, los filtros o la página (FR-019).
-            anuncio = esCambio && resultado is not null ? $"{resultado.Total} usuarios encontrados" : anuncio;
+            anuncio = anunciarResultados && resultado is not null ? $"{resultado.Total} usuarios encontrados" : anuncio;
         }
         catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
         {
@@ -223,7 +232,8 @@
     /// Envía la operación con la <c>version</c> de la fila como <c>If-Match</c> y solo muestra lo que el servidor confirma:
     /// al terminar bien, la fila pasa a ser la respuesta (estado, versión y acciones) y se anuncia el éxito; ante un
     /// rechazo se muestra el texto de su código y, si la API devuelve <c>actual</c> (412), el estado real (US2-7);
-    /// sin respuesta, la fila se queda como estaba (FR-042, EC-8).
+    /// ante <c>sin-permiso</c> se recarga la página para refrescar <c>acciones</c> (US5-3); sin respuesta, la fila se
+    /// queda como estaba (FR-042, EC-8).
     /// </summary>
     private async Task CambiarEstadoAsync(UsuarioResumen usuario, bool desactivar)
     {
@@ -238,6 +248,21 @@
             {
                 ReemplazarFila(respuesta.Valor!);
                 anuncio = desactivar ? $"{usuario.NombreCompleto} fue desactivado." : $"{usuario.NombreCompleto} fue activado.";
+                return;
+            }
+
+            if (respuesta.CodigoError == CodigosError.SinPermiso)
+            {
+                // El permiso se retiró desde que se cargó la página (US5-3, EC-7): se vuelve a pedir la misma página
+                // para mostrar las acciones vigentes que calcula la API. Si ya ni siquiera se puede ver el listado, la
+                // recarga no conserva datos y muestra su propio rechazo.
+                anuncio = null;
+                await CargarAsync(anunciarResultados: false);
+                if (resultado is not null)
+                {
+                    MostrarFallo(TextosErrores.ParaCodigo(CodigosError.SinPermiso), usuario, desactivar);
+                }
+
                 return;
             }
 

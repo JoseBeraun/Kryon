@@ -28,30 +28,48 @@ public static class UsuariosEndpoints
     /// <summary>Clave de <c>errors</c> cuando el cuerpo entero no se puede leer y no hay un campo al que asociar el error.</summary>
     private const string CampoCuerpo = "cuerpo";
 
+    /// <summary>
+    /// Mapea los 7 endpoints, cada uno con su política (SC-005). Las acciones que anuncia la API salen de esas mismas
+    /// políticas: <see cref="CapacidadesAsync"/> evalúa <c>Acceder</c>, <c>Editar</c>, <c>Activar</c> y
+    /// <c>Desactivar</c> y <see cref="CalculadoraAcciones"/> las traduce a <c>acciones</c>; <c>puedeRegistrar</c> sale de
+    /// <c>Registrar</c> y del gate <see cref="GateRegistroUsuarios"/>, las mismas condiciones con las que se mapea y se
+    /// autoriza el registro. Así una acción visible no puede divergir de una permitida (comprobado en
+    /// <c>CoherenciaAccionesTests</c>).
+    /// </summary>
     public static IEndpointRouteBuilder MapUsuariosEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        // GET listado → Usuarios.Acceder. puedeRegistrar = Usuarios.Registrar y gate RegistroUsuarios abierto.
         endpoints.MapGet("/api/usuarios", ListarAsync)
             .RequireAuthorization(PoliticasUsuarios.Acceder);
+
+        // GET roles asignables → Usuarios.Acceder.
         endpoints.MapGet("/api/usuarios/roles-asignables", ListarRolesAsignablesAsync)
             .RequireAuthorization(PoliticasUsuarios.Acceder);
+
+        // GET detalle → Usuarios.Acceder; acciones.verDetalle = Usuarios.Acceder.
         endpoints.MapGet("/api/usuarios/{id:guid}", ObtenerAsync)
             .RequireAuthorization(PoliticasUsuarios.Acceder)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Consulta);
 
-        // Gate RegistroUsuarios (tasks.md → Feature / release gating): sin los puntos de integración de DEP-2, DEP-3 y
-        // DEP-5 registrados, el registro no se entrega y el endpoint no existe.
+        // POST registro → Usuarios.Registrar, y solo con el gate RegistroUsuarios abierto (tasks.md → Feature / release
+        // gating): sin los puntos de integración de DEP-2, DEP-3 y DEP-5 registrados, el endpoint no existe.
         if (GateRegistroUsuarios.EstaAbierto(endpoints.ServiceProvider.GetRequiredService<IServiceProviderIsService>()))
         {
             endpoints.MapPost("/api/usuarios", RegistrarAsync)
                 .RequireAuthorization(PoliticasUsuarios.Registrar);
         }
 
+        // PUT edición → Usuarios.Editar; acciones.editar = Usuarios.Editar (cambiarRol, además, no en la cuenta propia).
         endpoints.MapPut("/api/usuarios/{id:guid}", EditarAsync)
             .RequireAuthorization(PoliticasUsuarios.Editar)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Edicion);
+
+        // POST desactivación → Usuarios.Desactivar; acciones.desactivar = Usuarios.Desactivar, usuario Activo y no propio.
         endpoints.MapPost("/api/usuarios/{id:guid}/desactivacion", DesactivarAsync)
             .RequireAuthorization(PoliticasUsuarios.Desactivar)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Desactivacion);
+
+        // POST activación → Usuarios.Activar; acciones.activar = Usuarios.Activar y usuario Inactivo.
         endpoints.MapPost("/api/usuarios/{id:guid}/activacion", ActivarAsync)
             .RequireAuthorization(PoliticasUsuarios.Activar)
             .RegistrarUsuarioNoAccesible(OperacionSolicitada.Activacion);
@@ -422,7 +440,8 @@ public static class UsuariosEndpoints
 
     /// <summary>
     /// Capacidades del actor con las mismas políticas que protegen cada operación (T008): las acciones anunciadas
-    /// coinciden con lo que la API autoriza (SC-005).
+    /// coinciden con lo que la API autoriza (SC-005). Registrar no está aquí porque no es una acción sobre un usuario:
+    /// lo evalúa <see cref="ListarAsync"/> para <c>puedeRegistrar</c>, junto con el gate.
     /// </summary>
     private static async Task<CapacidadesActor> CapacidadesAsync(IAuthorizationService autorizacion, ClaimsPrincipal usuario) => new(
         Acceder: await CumpleAsync(autorizacion, usuario, PoliticasUsuarios.Acceder),

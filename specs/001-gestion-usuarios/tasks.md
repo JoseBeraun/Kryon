@@ -256,14 +256,14 @@ fija ninguna regla sustituta.
 
 ### Tests for User Story 5 ⚠️
 
-- [ ] T095 [P] [US5] Pruebas de API de autorización por operación en `tests/Kryon.Api.Tests/Usuarios/AutorizacionOperacionesTests.cs`: para cada uno de los 7 endpoints, una identidad sin la capacidad correspondiente → 403 `sin-permiso` sin cambios ni datos (US5-2); permiso retirado entre dos solicitudes → la segunda es 403 (US5-3, EC-7).
-- [ ] T096 [P] [US5] Pruebas de API de coherencia de acciones en `tests/Kryon.Api.Tests/Usuarios/CoherenciaAccionesTests.cs`: para cada combinación de capacidades, `acciones` y `puedeRegistrar` coinciden exactamente con lo que la API permite ejecutar (SC-005).
-- [ ] T097 [P] [US5] Pruebas bUnit de visibilidad en `tests/Kryon.Web.Tests/Usuarios/AccionesVisiblesTests.cs`: ninguna acción con bandera falsa se renderiza en el listado ni en el detalle (US5-1). Ante un 403 `sin-permiso` en una acción, se muestra "No tienes permiso para realizar esta acción." y la fila se recarga sin esa acción (US5-3).
+- [X] T095 [P] [US5] Pruebas de API de autorización por operación en `tests/Kryon.Api.Tests/Usuarios/AutorizacionOperacionesTests.cs`: para cada uno de los 7 endpoints, una identidad sin la capacidad correspondiente → 403 `sin-permiso` sin cambios ni datos (US5-2); permiso retirado entre dos solicitudes → la segunda es 403 (US5-3, EC-7).
+- [X] T096 [P] [US5] Pruebas de API de coherencia de acciones en `tests/Kryon.Api.Tests/Usuarios/CoherenciaAccionesTests.cs`: para cada combinación de capacidades, `acciones` y `puedeRegistrar` coinciden exactamente con lo que la API permite ejecutar (SC-005).
+- [X] T097 [P] [US5] Pruebas bUnit de visibilidad en `tests/Kryon.Web.Tests/Usuarios/AccionesVisiblesTests.cs`: ninguna acción con bandera falsa se renderiza en el listado ni en el detalle (US5-1). Ante un 403 `sin-permiso` en una acción, se muestra "No tienes permiso para realizar esta acción." y la fila se recarga sin esa acción (US5-3).
 
 ### Implementation for User Story 5
 
-- [ ] T098 [US5] En `src/Kryon.Web/Usuarios/ListadoUsuarios.razor` y `src/Kryon.Web/Usuarios/DetalleUsuario.razor`, ante `sin-permiso` en cualquier acción: mostrar el mensaje de `TextosErrores` y volver a pedir el usuario afectado (o la página) para refrescar `acciones` (US5-3).
-- [ ] T099 [US5] Verificar y documentar en `src/Kryon.Api/Usuarios/UsuariosEndpoints.cs` (comentario por endpoint) que cada endpoint exige su política y que `CalculadoraAcciones` usa las **mismas** capacidades que esas políticas, para que las acciones visibles no puedan divergir de las permitidas (SC-005). Si divergen, corregir la calculadora.
+- [X] T098 [US5] En `src/Kryon.Web/Usuarios/ListadoUsuarios.razor` y `src/Kryon.Web/Usuarios/DetalleUsuario.razor`, ante `sin-permiso` en cualquier acción: mostrar el mensaje de `TextosErrores` y volver a pedir el usuario afectado (o la página) para refrescar `acciones` (US5-3).
+- [X] T099 [US5] Verificar y documentar en `src/Kryon.Api/Usuarios/UsuariosEndpoints.cs` (comentario por endpoint) que cada endpoint exige su política y que `CalculadoraAcciones` usa las **mismas** capacidades que esas políticas, para que las acciones visibles no puedan divergir de las permitidas (SC-005). Si divergen, corregir la calculadora.
 
 **Checkpoint**: la visibilidad y la autorización son coherentes en todas las operaciones.
 

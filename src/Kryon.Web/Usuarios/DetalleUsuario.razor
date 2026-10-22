@@ -105,9 +105,18 @@ else if (usuario is not null)
         }
 
         cargado = Id;
+        anuncio = null;
+        await CargarAsync();
+    }
+
+    /// <summary>
+    /// Pide a la API el usuario con sus acciones vigentes. Ante cualquier rechazo o sin respuesta no conserva los datos
+    /// anteriores.
+    /// </summary>
+    private async Task CargarAsync()
+    {
         usuario = null;
         noEncontrado = false;
-        anuncio = null;
         error = null;
 
         try
@@ -155,7 +164,7 @@ else if (usuario is not null)
 
     /// <summary>
     /// Igual que en el listado: envía la <c>version</c> como <c>If-Match</c> y solo muestra lo que el servidor confirma
-    /// (US2-7, FR-042, EC-8).
+    /// (US2-7, FR-042, EC-8). Ante <c>sin-permiso</c> recarga el usuario para refrescar <c>acciones</c> (US5-3).
     /// </summary>
     private async Task CambiarEstadoAsync(bool desactivar)
     {
@@ -176,6 +185,21 @@ else if (usuario is not null)
             {
                 usuario = respuesta.Valor;
                 anuncio = desactivar ? $"{actual.NombreCompleto} fue desactivado." : $"{actual.NombreCompleto} fue activado.";
+                return;
+            }
+
+            if (respuesta.CodigoError == CodigosError.SinPermiso)
+            {
+                // El permiso se retiró desde que se cargó el detalle (US5-3, EC-7): se vuelve a pedir el usuario para
+                // mostrar las acciones vigentes que calcula la API. Si ya ni siquiera se puede ver, la recarga no
+                // conserva datos y muestra su propio rechazo.
+                anuncio = null;
+                await CargarAsync();
+                if (usuario is not null)
+                {
+                    MostrarFallo(TextosErrores.ParaCodigo(CodigosError.SinPermiso), desactivar);
+                }
+
                 return;
             }
 
