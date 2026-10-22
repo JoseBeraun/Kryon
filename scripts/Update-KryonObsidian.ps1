@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Feature = "001-gestion-usuarios"
 )
 
@@ -7,45 +7,40 @@ $ErrorActionPreference = "Stop"
 $Repo = Split-Path $PSScriptRoot -Parent
 Set-Location $Repo
 
-$TasksFile = "specs\$Feature\tasks.md"
-$ControlFile = "docs\kryon\00-Control-Center.md"
-$DashboardFile = "docs\kryon\05-Dashboard-Automatico.md"
+$TasksFile = Join-Path $Repo "specs\$Feature\tasks.md"
+$DashboardFile = Join-Path $Repo "docs\kryon\05-Dashboard-Automatico.local.md"
 
 if (-not (Test-Path $TasksFile)) {
-    throw "No existe: $TasksFile"
+    throw "No existe tasks.md para $Feature"
 }
 
-if (-not (Test-Path $ControlFile)) {
-    throw "No existe: $ControlFile"
-}
-
-# -----------------------------
-# GIT
-# -----------------------------
-
+# Git
 $Branch = (git branch --show-current).Trim()
 $Hash = (git rev-parse --short HEAD).Trim()
 $Commit = (git log -1 --pretty=%s).Trim()
 
-$Status = @(
-    git status --short |
-    Where-Object { $_ -notmatch '\.obsidian' }
+$GitStatus = @(
+    git status --short
 )
 
-if ($Status.Count -eq 0) {
-    $StatusMd = "✅ Working tree limpio."
+if ($GitStatus.Count -eq 0) {
+    $GitStatusText = "Working tree limpio."
 }
 else {
-    $StatusMd = ($Status | ForEach-Object { "- ``$_``" }) -join "`r`n"
+    $GitStatusText = ($GitStatus | ForEach-Object { "- ``$_``" }) -join "`r`n"
 }
 
-# -----------------------------
-# TASKS
-# -----------------------------
-
+# Tasks
 $Tasks = @()
 
-foreach ($Line in Get-Content $TasksFile) {
+$Utf8 = New-Object System.Text.UTF8Encoding($false)
+
+$Lines = [System.IO.File]::ReadAllLines(
+    $TasksFile,
+    [System.Text.Encoding]::UTF8
+)
+
+foreach ($Line in $Lines) {
 
     if ($Line -match '^- \[(?<state>[ Xx])\]\s+(?<id>T\d{3})\s*(?<text>.*)$') {
 
@@ -54,17 +49,17 @@ foreach ($Line in Get-Content $TasksFile) {
         $TaskText = $Matches["text"]
 
         $Tasks += [PSCustomObject]@{
-            Id        = $TaskId
-            Number    = [int]$TaskId.Substring(1)
+            Id = $TaskId
+            Number = [int]$TaskId.Substring(1)
             Completed = ($TaskState -eq "X" -or $TaskState -eq "x")
-            Text      = $TaskText.Trim()
+            Text = $TaskText.Trim()
         }
     }
 }
 
 $CompletedTasks = @(
     $Tasks |
-    Where-Object Completed |
+    Where-Object { $_.Completed } |
     Sort-Object Number
 )
 
@@ -85,78 +80,69 @@ else {
     $Percent = 0
 }
 
-$Last = $CompletedTasks |
-    Select-Object -Last 1
+$LastTask = $CompletedTasks | Select-Object -Last 1
+$NextTask = $PendingTasks | Select-Object -First 1
+$NextSix = @($PendingTasks | Select-Object -First 6)
 
-$Next = $PendingTasks |
-    Select-Object -First 1
-
-$NextSix = @(
-    $PendingTasks |
-    Select-Object -First 6
-)
-
-if ($Last) {
-    $LastText = "**$($Last.Id)** $($Last.Text)"
+if ($LastTask) {
+    $LastText = "**$($LastTask.Id)** $($LastTask.Text)"
 }
 else {
     $LastText = "Ninguna"
 }
 
-if ($Next) {
-    $NextText = "**$($Next.Id)** $($Next.Text)"
+if ($NextTask) {
+    $NextText = "**$($NextTask.Id)** $($NextTask.Text)"
 }
 else {
-    $NextText = "✅ Feature completada"
+    $NextText = "Feature completada"
 }
 
-$NextMd = if ($NextSix.Count -gt 0) {
-    (
-        $NextSix |
-        ForEach-Object {
-            $Description = $_.Text
+if ($NextSix.Count -gt 0) {
 
-            if ($Description.Length -gt 150) {
-                $Description = $Description.Substring(0,147) + "..."
-            }
+    $NextLines = @()
 
-            "- [ ] **$($_.Id)** $Description"
+    foreach ($Task in $NextSix) {
+
+        $Description = $Task.Text
+
+        if ($Description.Length -gt 150) {
+            $Description = $Description.Substring(0,147) + "..."
         }
-    ) -join "`r`n"
+
+        $NextLines += "- [ ] **$($Task.Id)** $Description"
+    }
+
+    $NextTasksText = $NextLines -join "`r`n"
 }
 else {
-    "✅ No quedan tareas."
+    $NextTasksText = "No quedan tareas pendientes."
 }
 
 $Now = Get-Date -Format "dd/MM/yyyy HH:mm:ss"
 
-# -----------------------------
-# DASHBOARD
-# -----------------------------
-
 $Dashboard = @"
-# Dashboard automático — Kryon
+# Dashboard automatico - Kryon
 
-> [!warning]
-> Archivo generado automáticamente.
+> Archivo generado automaticamente.
 > No editar manualmente.
 
-**Última actualización:** $Now
+**Ultima actualizacion:** $Now
 
-## Feature
+## Feature activa
 
 ``$Feature``
 
 ## Progreso
 
-| Métrica | Valor |
+| Metrica | Valor |
 |---|---:|
 | Total | $Total |
 | Completadas | $Completed |
 | Pendientes | $Pending |
 | Avance | $Percent % |
 
-## Última tarea completada
+## Ultima tarea completada
 
 $LastText
 
@@ -164,21 +150,21 @@ $LastText
 
 $NextText
 
-## Próximas tareas
+## Proximas tareas
 
-$NextMd
+$NextTasksText
 
 ## Git
 
 **Branch:** ``$Branch``
 
-**HEAD:** ``$Hash`` — $Commit
+**HEAD:** ``$Hash`` - $Commit
 
 ### Cambios locales
 
-$StatusMd
+$GitStatusText
 
-## Navegación
+## Navegacion
 
 - [[00-Control-Center]]
 - [[features/001-Gestion-Usuarios]]
@@ -191,49 +177,11 @@ $StatusMd
 Generado por ``scripts/Update-KryonObsidian.ps1``.
 "@
 
-Set-Content $DashboardFile $Dashboard -Encoding UTF8
-
-# -----------------------------
-# CONTROL CENTER
-# -----------------------------
-
-$AutoSection = @"
-<!-- KRYON-AUTO-START -->
-
-## 🤖 Estado automático
-
-**Última sincronización:** $Now
-
-**Branch:** ``$Branch``
-
-**HEAD:** ``$Hash`` — $Commit
-
-**Progreso:** $Completed / $Total — **$Percent %**
-
-**Última completada:** $LastText
-
-**Siguiente:** $NextText
-
-➡️ [[05-Dashboard-Automatico|Abrir dashboard automático]]
-
-<!-- KRYON-AUTO-END -->
-"@
-
-$Control = Get-Content $ControlFile -Raw
-
-$Pattern = '(?s)<!-- KRYON-AUTO-START -->.*?<!-- KRYON-AUTO-END -->'
-
-if ($Control -match $Pattern) {
-    $Control = [regex]::Replace($Control, $Pattern, $AutoSection)
-}
-else {
-    $Control = $Control.Replace(
-        "# Kryon — Control Center",
-        "# Kryon — Control Center`r`n`r`n$AutoSection"
-    )
-}
-
-Set-Content $ControlFile $Control -Encoding UTF8
+[System.IO.File]::WriteAllText(
+    $DashboardFile,
+    $Dashboard,
+    $Utf8
+)
 
 Write-Host ""
 Write-Host "Kryon + Obsidian sincronizados."
@@ -242,8 +190,8 @@ Write-Host "Branch:    $Branch"
 Write-Host "HEAD:      $Hash"
 Write-Host "Progreso:  $Completed/$Total ($Percent%)"
 
-if ($Next) {
-    Write-Host "Siguiente: $($Next.Id)"
+if ($NextTask) {
+    Write-Host "Siguiente: $($NextTask.Id)"
 }
 
 Write-Host ""
